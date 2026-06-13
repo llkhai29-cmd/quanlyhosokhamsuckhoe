@@ -1,0 +1,6 @@
+{
+  "name": "Quản lý Hồ sơ Khám sức khỏe",
+  "description": "Hệ thống quản lý số liệu hồ sơ khám sức khỏe theo độ tuổi, tích hợp đồng bộ Google Sheets, lập biểu đồ trực quan hóa dữ liệu và xuất báo cáo Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "CheckupRecord": {
+      "title": "CheckupRecord",
+      "description": "Thống kê số lượng hồ sơ khám sức khỏe theo danh mục nhóm tuổi chỉ định.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Mã định danh duy nhất của bản ghi"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Ngày khám sức khỏe dưới dạng YYYY-MM-DD"
+        },
+        "facility": {
+          "type": "string",
+          "description": "Tên cơ sở khám sức khỏe đối chiếu"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "under_6",
+            "from_6_to_18",
+            "from_18_to_60_community",
+            "from_18_to_60_worker",
+            "from_18_to_60_officer",
+            "above_60"
+          ],
+          "description": "Phân loại danh mục nhóm tuổi"
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Số lượng hồ sơ tối thiểu lớn hơn 0"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Ghi chú bổ sung"
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "Thời gian tạo bản ghi miliseconds"
+        },
+        "syncedAt": {
+          "type": "integer",
+          "description": "Thời gian đồng bộ lên Sheets hoặc null"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Mã người dùng Google UID để lọc dữ liệu riêng tư"
+        }
+      },
+      "required": [
+        "id",
+        "date",
+        "facility",
+        "category",
+        "quantity",
+        "createdAt",
+        "userId"
+      ]
+    }
+  },
+  "firestore": {
+    "/records/{recordId}": {
+      "schema": {
+        "$ref": "#/entities/CheckupRecord"
+      },
+      "description": "Danh sách các bản ghi số liệu hồ sơ khám của từng tài khoản người dùng"
+    }
+  }
+}
