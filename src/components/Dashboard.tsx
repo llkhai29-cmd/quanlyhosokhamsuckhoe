@@ -352,6 +352,51 @@ export default function Dashboard({
     }).sort((a, b) => b['Tỷ lệ hoàn thành (%)'] - a['Tỷ lệ hoàn thành (%)']);
   }, [facilityTableData, selectedComparisonFacilities, facilityTargets]);
 
+  // Detailed age category table data
+  const ageCategoryTableData = useMemo(() => {
+    // Initialize map
+    const categoryTotals: Record<AgeGroup, {
+      category: AgeGroup;
+      name: string;
+      parentGroup: string;
+      parentGroupName: string;
+      subName?: string;
+      color: string;
+      total: number;
+      percentage: number;
+    }> = {} as any;
+
+    // Fill categories
+    (Object.keys(CATEGORIES) as AgeGroup[]).forEach((key) => {
+      const cat = CATEGORIES[key];
+      categoryTotals[key] = {
+        category: key,
+        name: cat.name,
+        parentGroup: cat.parentGroup,
+        parentGroupName: cat.parentGroupName,
+        subName: cat.subName,
+        color: cat.color,
+        total: 0,
+        percentage: 0,
+      };
+    });
+
+    // Populate with record quantities
+    filteredRecords.forEach((r) => {
+      if (categoryTotals[r.category]) {
+        categoryTotals[r.category].total += r.quantity;
+      }
+    });
+
+    const totalQuantity = Object.values(categoryTotals).reduce((sum, item) => sum + item.total, 0);
+
+    // Calculate percentage
+    return (Object.values(categoryTotals) as any[]).map((item) => ({
+      ...item,
+      percentage: totalQuantity > 0 ? (item.total / totalQuantity) * 100 : 0
+    }));
+  }, [filteredRecords]);
+
   if (records.length === 0) {
     return (
       <div id="dashboard-empty-state" className="bg-white rounded-2xl border border-slate-150 p-8 text-center flex flex-col items-center justify-center min-h-[400px]">
@@ -919,6 +964,99 @@ export default function Dashboard({
             </table>
           </div>
         )}
+      </div>
+
+      {/* Section: Age Group & Category Statistical Summary Table */}
+      <div id="age-category-summary-table-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-500" />
+            <h3 className="text-sm font-bold text-slate-900">Bảng Tổng hợp Số liệu chi tiết theo Từng Nhóm tuổi và  Danh mục đối tượng</h3>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Phân bổ tổng số lượng hồ sơ sức khoẻ theo các nhóm đối tượng (Từ Trẻ em dưới 6 tuổi, lứa tuổi Học sinh, các Phân loại Lao động 18-60 đến Người cao tuổi trên 60).
+          </p>
+        </div>
+
+        <div className="overflow-x-auto border border-slate-100 rounded-xl">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider text-[9px] select-none">
+              <tr>
+                <th className="px-4 py-3 w-16 text-center">Màu sắc</th>
+                <th className="px-4 py-3">Danh mục đối tượng</th>
+                <th className="px-4 py-3">Nhóm Tổ (Nhóm chung)</th>
+                <th className="px-4 py-3 text-right">Tổng số hồ sơ</th>
+                <th className="px-4 py-3 text-center w-40">Tỷ lệ cơ cấu</th>
+                <th className="px-4 py-3">Mô tả chi tiết phân nhóm</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {ageCategoryTableData.map((item) => {
+                return (
+                  <tr key={item.category} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-4 py-3.5 text-center">
+                      <span 
+                        className="inline-block w-3.5 h-3.5 rounded-full border border-white shadow-xs" 
+                        style={{ backgroundColor: item.color }}
+                      />
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-800">
+                      {item.name}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-500">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50/50 text-indigo-700">
+                        {item.parentGroupName}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-bold font-mono text-slate-900">
+                      {item.total.toLocaleString('vi-VN')}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <div className="flex flex-col items-center gap-1 select-none">
+                        <span className="font-bold text-[10px] text-slate-700 font-mono">
+                          {item.percentage.toFixed(1)}%
+                        </span>
+                        <div className="w-24 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div 
+                            className="h-1.5 rounded-full transition-all duration-500" 
+                            style={{ 
+                              width: `${item.percentage}%`,
+                              backgroundColor: item.color
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-500 max-w-xs truncate" title={item.subName || item.name}>
+                      {item.subName || 'Độ tuổi đặc thù không phân nhóm nhỏ'}
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Total Row */}
+              <tr className="bg-slate-50/30 font-bold divide-y divide-slate-100">
+                <td className="px-4 py-3.5 text-center">
+                  <span className="font-mono text-[10px] text-slate-400">∑</span>
+                </td>
+                <td className="px-4 py-3.5 font-bold text-slate-900">
+                  TỔNG CỘNG TẤT CẢ DANH MỤC
+                </td>
+                <td className="px-4 py-3.5"></td>
+                <td className="px-4 py-3.5 text-right font-black font-mono text-indigo-600 text-[13px]">
+                  {stats.total.toLocaleString('vi-VN')}
+                </td>
+                <td className="px-4 py-3.5 text-center">
+                  <span className="font-bold text-slate-700 font-mono text-[11px]">
+                    100.0%
+                  </span>
+                </td>
+                <td className="px-4 py-3.5 text-slate-400 font-normal">
+                  Toàn bộ hồ sơ phân lọc theo bộ lọc hiện tại
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Main Charts Row */}
