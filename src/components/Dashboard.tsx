@@ -21,7 +21,7 @@ import {
   Area,
   ReferenceLine
 } from 'recharts';
-import { LayoutDashboard, TrendingUp, Users, Calendar, Landmark, Percent, BarChart3, CheckSquare, Square, SlidersHorizontal, Search, Edit2, Target } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Users, Calendar, Landmark, Percent, BarChart3, CheckSquare, Square, SlidersHorizontal, Search, Edit2, Target, Baby, GraduationCap, Briefcase, Heart } from 'lucide-react';
 
 interface DashboardProps {
   records: CheckupRecord[];
@@ -474,64 +474,82 @@ export default function Dashboard({
       {/* KPI Cards Area */}
       <div id="dashboard-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Total Card */}
-        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <p className="text-[10px] uppercase font-semibold text-slate-300 tracking-wider">Tổng cộng hồ sơ</p>
-          <p className="text-2xl font-bold font-mono mt-1">{stats.total.toLocaleString('vi-VN')}</p>
+        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-[0_8px_30px_rgb(15,23,42,0.08)] hover:shadow-[0_15px_35px_rgb(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden flex flex-col justify-between min-h-[125px]">
+          <div>
+            <p className="text-[10px] uppercase font-semibold text-slate-300 tracking-wider">Tổng cộng hồ sơ</p>
+            <p className="text-2xl font-bold font-mono mt-1.5">{stats.total.toLocaleString('vi-VN')}</p>
+          </div>
           <p className="text-[10px] text-slate-400 mt-2">Toàn hệ thống</p>
-          <div className="absolute right-3 bottom-3 opacity-15">
-            <Users className="w-10 h-10" />
+          <div className="absolute right-3.5 top-3.5 p-1.5 bg-white/10 rounded-lg text-white">
+            <Users className="w-4 h-4" />
           </div>
         </div>
 
         {/* 0-6 Group Card */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">0 - dưới 6 tuổi</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+        <div className="bg-white rounded-2xl border border-slate-100/70 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_15px_35px_rgba(30,41,59,0.06)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[125px]">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">0 - dưới 6 tuổi</span>
+              <p className="text-xl font-bold font-mono text-slate-800 leading-none">{stats.under6.toLocaleString('vi-VN')}</p>
+            </div>
+            <div className="p-2 rounded-xl bg-blue-50 text-blue-500 shadow-sm shadow-blue-100/50">
+              <Baby className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-xl font-bold font-mono text-slate-800">{stats.under6.toLocaleString('vi-VN')}</p>
-          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-2">
-            <Percent className="w-3 h-3 text-slate-400" />
-            <span>Tỷ lệ: {stats.total > 0 ? ((stats.under6 / stats.total) * 100).toFixed(1) : 0}%</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-50">
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-50 text-blue-600 font-semibold text-[9px] scale-90 font-sans">%</div>
+            <span className="font-medium text-slate-600">Tỷ lệ: {stats.total > 0 ? ((stats.under6 / stats.total) * 100).toFixed(1) : 0}%</span>
           </div>
         </div>
 
         {/* 6-18 Group Card */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">6 - dưới 18 tuổi</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+        <div className="bg-white rounded-2xl border border-slate-100/70 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_15px_35px_rgba(30,41,59,0.06)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[125px]">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">6 - dưới 18 tuổi</span>
+              <p className="text-xl font-bold font-mono text-slate-800 leading-none">{stats.from6to18.toLocaleString('vi-VN')}</p>
+            </div>
+            <div className="p-2 rounded-xl bg-cyan-50 text-cyan-500 shadow-sm shadow-cyan-100/50">
+              <GraduationCap className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-xl font-bold font-mono text-slate-800">{stats.from6to18.toLocaleString('vi-VN')}</p>
-          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-2">
-            <Percent className="w-3 h-3 text-slate-500" />
-            <span>Tỷ lệ: {stats.total > 0 ? ((stats.from6to18 / stats.total) * 100).toFixed(1) : 0}%</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-50">
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-cyan-50 text-cyan-600 font-semibold text-[9px] scale-90 font-sans">%</div>
+            <span className="font-medium text-slate-600">Tỷ lệ: {stats.total > 0 ? ((stats.from6to18 / stats.total) * 100).toFixed(1) : 0}%</span>
           </div>
         </div>
 
         {/* 18-60 workforce Card */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">18 - dưới 60 tuổi</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+        <div className="bg-white rounded-2xl border border-slate-100/70 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_15px_35px_rgba(30,41,59,0.06)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[125px]">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">18 - dưới 60 tuổi</span>
+              <p className="text-xl font-bold font-mono text-slate-800 leading-none">{stats.from18to60.toLocaleString('vi-VN')}</p>
+            </div>
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-500 shadow-sm shadow-emerald-100/50">
+              <Briefcase className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-xl font-bold font-mono text-slate-800">{stats.from18to60.toLocaleString('vi-VN')}</p>
-          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-2">
-            <Percent className="w-3 h-3 text-emerald-500" />
-            <span>Tỷ lệ: {stats.total > 0 ? ((stats.from18to60 / stats.total) * 100).toFixed(1) : 0}%</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-50">
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 font-semibold text-[9px] scale-90 font-sans">%</div>
+            <span className="font-medium text-slate-600">Tỷ lệ: {stats.total > 0 ? ((stats.from18to60 / stats.total) * 100).toFixed(1) : 0}%</span>
           </div>
         </div>
 
         {/* Seniors Group Card */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Từ 60 tuổi trở lên</span>
-            <div className="w-2.5 h-2.5 rounded-full bg-pink-500" />
+        <div className="bg-white rounded-2xl border border-slate-100/70 p-4 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_15px_35px_rgba(30,41,59,0.06)] hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[125px]">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Từ 60 tuổi trở lên</span>
+              <p className="text-xl font-bold font-mono text-slate-800 leading-none">{stats.above60.toLocaleString('vi-VN')}</p>
+            </div>
+            <div className="p-2 rounded-xl bg-pink-50 text-pink-500 shadow-sm shadow-pink-100/50">
+              <Heart className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-xl font-bold font-mono text-slate-800">{stats.above60.toLocaleString('vi-VN')}</p>
-          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-2">
-            <Percent className="w-3 h-3 text-pink-500" />
-            <span>Tỷ lệ: {stats.total > 0 ? ((stats.above60 / stats.total) * 100).toFixed(1) : 0}%</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-50">
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-pink-50 text-pink-600 font-semibold text-[9px] scale-90 font-sans">%</div>
+            <span className="font-medium text-slate-600">Tỷ lệ: {stats.total > 0 ? ((stats.above60 / stats.total) * 100).toFixed(1) : 0}%</span>
           </div>
         </div>
       </div>
@@ -755,7 +773,7 @@ export default function Dashboard({
                     : 0;
                   
                   const targetValue = facilityTargets[item.facility] || 0;
-                  const achRate = targetValue > 0 ? (item.total / targetValue) * 105 : 0; // standard ratio but capped visual representation as per standard formula: (total / target) * 100
+                  // Áp dụng công thức: tỷ lệ = số lượng hồ sơ / số lượng chỉ tiêu
                   const rawAchRate = targetValue > 0 ? (item.total / targetValue) * 100 : 0;
                   const isEditing = editingFacility === item.facility;
                   

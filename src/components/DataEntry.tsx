@@ -319,17 +319,24 @@ export default function DataEntry({
           {existingFacilities.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <span className="text-[10px] text-slate-400 self-center">Gợi ý gần đây:</span>
-              {existingFacilities.slice(0, 3).map((f, idx) => (
-                <button
-                  id={`suggested-facility-${idx}`}
-                  key={idx}
-                  type="button"
-                  onClick={() => setFacility(f)}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
-                >
-                  {f}
-                </button>
-              ))}
+              <AnimatePresence mode="popLayout">
+                {existingFacilities.slice(0, 3).map((f, idx) => (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8, y: 2 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, y: -2 }}
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    id={`suggested-facility-${idx}`}
+                    key={f}
+                    type="button"
+                    onClick={() => setFacility(f)}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
+                  >
+                    {f}
+                  </motion.button>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -428,17 +435,24 @@ export default function DataEntry({
           {existingManagedAreas.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <span className="text-[10px] text-slate-400 self-center">Gợi ý gần đây:</span>
-              {existingManagedAreas.slice(0, 3).map((a, idx) => (
-                <button
-                  id={`suggested-area-${idx}`}
-                  key={idx}
-                  type="button"
-                  onClick={() => setManagedArea(a)}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
-                >
-                  {a}
-                </button>
-              ))}
+              <AnimatePresence mode="popLayout">
+                {existingManagedAreas.slice(0, 3).map((a, idx) => (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8, y: 2 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, y: -2 }}
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    id={`suggested-area-${idx}`}
+                    key={a}
+                    type="button"
+                    onClick={() => setManagedArea(a)}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
+                  >
+                    {a}
+                  </motion.button>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -488,38 +502,50 @@ export default function DataEntry({
             Nhóm đối tượng độ tuổi
           </label>
           <div className="grid grid-cols-1 gap-2.5 max-h-[220px] overflow-y-auto pr-1">
-            {Object.values(CATEGORIES).map((cat) => (
-              <label
-                key={cat.id}
-                className={`relative flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                  category === cat.id
-                    ? 'border-blue-500 bg-blue-50/30'
-                    : 'border-slate-100 hover:border-slate-200 bg-white'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="age-category"
-                  checked={category === cat.id}
-                  onChange={() => setCategory(cat.id)}
-                  className="mt-1 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-800">{cat.name}</span>
-                    <span
-                      className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                      style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
-                    >
-                      {cat.parentGroupName}
-                    </span>
-                  </div>
-                  {cat.subName && (
-                    <p className="text-[10px] text-slate-500 mt-0.5">Phân loại: {cat.subName}</p>
+            {Object.values(CATEGORIES).map((cat) => {
+              const isActive = category === cat.id;
+              return (
+                <motion.label
+                  key={cat.id}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={`relative flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer overflow-hidden ${
+                    isActive
+                      ? 'border-transparent'
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="active-category-indicator"
+                      className="absolute inset-0 bg-blue-50/35 border border-blue-500 rounded-xl pointer-events-none z-0"
+                      transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                    />
                   )}
-                </div>
-              </label>
-            ))}
+                  <input
+                    type="radio"
+                    name="age-category"
+                    checked={isActive}
+                    onChange={() => setCategory(cat.id)}
+                    className="mt-1 text-blue-600 focus:ring-blue-500 z-10"
+                  />
+                  <div className="flex-1 z-10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-800">{cat.name}</span>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
+                      >
+                        {cat.parentGroupName}
+                      </span>
+                    </div>
+                    {cat.subName && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">Phân loại: {cat.subName}</p>
+                    )}
+                  </div>
+                </motion.label>
+              );
+            })}
           </div>
         </div>
 
@@ -571,11 +597,20 @@ export default function DataEntry({
         </button>
       </form>
 
-      {showSuccessToast && (
-        <div id="success-toast" className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white text-xs px-4 py-2 rounded-full shadow-md flex items-center gap-2 transition-opacity animate-fade-in">
-          <span>✓</span> Thêm bản ghi thành công!
-        </div>
-      )}
+      <AnimatePresence>
+        {showSuccessToast && (
+          <motion.div
+            id="success-toast"
+            initial={{ opacity: 0, y: 15, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 15, x: '-50%' }}
+            transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+            className="absolute bottom-4 left-1/2 bg-emerald-600 text-white text-xs px-4 py-2 rounded-full shadow-lg flex items-center gap-2 z-50 font-medium"
+          >
+            <span>✓</span> Thêm bản ghi thành công!
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
