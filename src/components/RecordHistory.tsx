@@ -33,6 +33,7 @@ export default function RecordHistory({
   const [recordToEdit, setRecordToEdit] = useState<CheckupRecord | null>(null);
   const [editDate, setEditDate] = useState('');
   const [editFacility, setEditFacility] = useState('');
+  const [editManagedArea, setEditManagedArea] = useState('');
   const [editCategory, setEditCategory] = useState<AgeGroup>('under_6');
   const [editQuantity, setEditQuantity] = useState<number>(1);
   const [editNotes, setEditNotes] = useState('');
@@ -41,6 +42,7 @@ export default function RecordHistory({
     setRecordToEdit(record);
     setEditDate(record.date);
     setEditFacility(record.facility);
+    setEditManagedArea(record.managedArea || '');
     setEditCategory(record.category);
     setEditQuantity(record.quantity);
     setEditNotes(record.notes || '');
@@ -51,12 +53,14 @@ export default function RecordHistory({
     if (!recordToEdit) return;
     if (!editDate) return;
     if (!editFacility.trim()) return;
+    if (!editManagedArea.trim()) return;
     if (editQuantity <= 0) return;
 
     onUpdateRecord({
       ...recordToEdit,
       date: editDate,
       facility: editFacility.trim(),
+      managedArea: editManagedArea.trim(),
       category: editCategory,
       quantity: editQuantity,
       notes: editNotes.trim() || undefined,
@@ -80,6 +84,7 @@ export default function RecordHistory({
   const filtered = useMemo(() => {
     return records.filter((r) => {
       const matchesSearch = r.facility.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (r.managedArea && r.managedArea.toLowerCase().includes(searchTerm.toLowerCase())) ||
                             (r.notes && r.notes.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
       return matchesSearch && matchesCategory;
@@ -144,7 +149,7 @@ export default function RecordHistory({
           <input
             id="history-search-input"
             type="text"
-            placeholder="Tìm kiếm theo cơ sở / ghi chú..."
+            placeholder="Tìm kiếm theo cơ sở / địa bàn / ghi chú..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-500 transition-all placeholder:text-slate-400"
@@ -189,7 +194,8 @@ export default function RecordHistory({
             <thead>
               <tr className="border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-2">Ngày khám</th>
-                <th className="py-3 px-2">Cơ sở khám / Địa bàn</th>
+                <th className="py-3 px-2">Cơ sở tổ chức khám</th>
+                <th className="py-3 px-2">Địa bàn quản lý</th>
                 <th className="py-3 px-2">Nhóm đối tượng</th>
                 <th className="py-3 px-2 text-right">Số lượng hồ sơ</th>
                 <th className="py-3 px-2">Ghi chú</th>
@@ -211,10 +217,18 @@ export default function RecordHistory({
                     </td>
 
                     {/* Facility */}
-                    <td className="py-3 px-2 font-medium text-slate-900 max-w-[200px] truncate">
+                    <td className="py-3 px-2 font-medium text-slate-900 max-w-[180px] truncate">
                       <div className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{record.facility}</span>
+                        <span title={record.facility}>{record.facility}</span>
+                      </div>
+                    </td>
+
+                    {/* Managed Area */}
+                    <td className="py-3 px-2 text-slate-600 max-w-[150px] truncate">
+                      <div className="flex items-center gap-1.5">
+                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 select-none pointer-events-none" />
+                        <span title={record.managedArea}>{record.managedArea}</span>
                       </div>
                     </td>
 
@@ -338,8 +352,12 @@ export default function RecordHistory({
             {/* Data Detail Card */}
             <div className="mt-4 p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-slate-400">Cơ sở khám:</span>
+                <span className="text-slate-400">Cơ sở tổ chức khám:</span>
                 <span className="font-semibold text-slate-800">{recordToDelete.facility}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Địa bàn quản lý:</span>
+                <span className="font-semibold text-slate-800">{recordToDelete.managedArea}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Ngày khám:</span>
@@ -437,8 +455,8 @@ export default function RecordHistory({
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              {/* Row 1: Date & Facility */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Row 1: Date, Facility & Managed Area */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Ngày khám:</label>
                   <input
@@ -450,13 +468,24 @@ export default function RecordHistory({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Cơ sở khám / Địa bàn:</label>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Cơ sở tổ chức khám:</label>
                   <input
                     type="text"
                     required
-                    placeholder="Tên cơ sở y tế"
+                    placeholder="VD: Trung tâm Y tế Quận 1"
                     value={editFacility}
                     onChange={(e) => setEditFacility(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Địa bàn quản lý:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Quận 1"
+                    value={editManagedArea}
+                    onChange={(e) => setEditManagedArea(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500"
                   />
                 </div>

@@ -57,7 +57,7 @@ export const createSpreadsheet = async (accessToken: string): Promise<SheetRespo
           properties: {
             title: 'Danh sách hồ sơ',
             gridProperties: {
-              columnCount: 10,
+              columnCount: 12,
               frozenRowCount: 1,
             },
           },
@@ -109,11 +109,12 @@ export const syncRecordsToSpreadsheet = async (
 ): Promise<void> => {
   try {
     // 1. Write the Records sheet
-    // Format rows: [ID, Ngày nhập, Cơ sở y tế, Nhóm, Số lượng, Ghi chú, Thời gian tạo, Thời gian đồng bộ]
+    // Format rows: [ID, Ngày nhập, Cơ sở tổ chức khám, Địa bàn quản lý, Mã nhóm tuổi, Tên nhóm, Số lượng, Ghi chú, Thời gian tạo, Thời gian đồng bộ]
     const headerRow = [
       'Mã bản ghi',
       'Ngày nhập',
-      'Cơ sở y tế / Địa bàn',
+      'Cơ sở tổ chức khám',
+      'Địa bàn quản lý',
       'Mã nhóm tuổi',
       'Tên nhóm đối tượng',
       'Cấp nhóm cha',
@@ -129,6 +130,7 @@ export const syncRecordsToSpreadsheet = async (
         r.id,
         r.date,
         r.facility,
+        r.managedArea || '',
         r.category,
         cat.name,
         cat.parentGroupName,
@@ -183,49 +185,49 @@ export const syncRecordsToSpreadsheet = async (
       'Tỷ lệ (%)',
     ];
 
-    const totalRecordsFormula = `=SUM('Danh sách hồ sơ'!G2:G5000)`;
+    const totalRecordsFormula = `=SUM('Danh sách hồ sơ'!H2:H5000)`;
 
     const summaryRows = [
       [
         'under_6',
         CATEGORIES.under_6.name,
         CATEGORIES.under_6.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "under_6", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "under_6", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D3/${totalRecordsFormula}, 0)`,
       ],
       [
         'from_6_to_18',
         CATEGORIES.from_6_to_18.name,
         CATEGORIES.from_6_to_18.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "from_6_to_18", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "from_6_to_18", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D4/${totalRecordsFormula}, 0)`,
       ],
       [
         'from_18_to_60_community',
         CATEGORIES.from_18_to_60_community.name,
         CATEGORIES.from_18_to_60_community.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "from_18_to_60_community", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "from_18_to_60_community", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D5/${totalRecordsFormula}, 0)`,
       ],
       [
         'from_18_to_60_worker',
         CATEGORIES.from_18_to_60_worker.name,
         CATEGORIES.from_18_to_60_worker.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "from_18_to_60_worker", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "from_18_to_60_worker", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D6/${totalRecordsFormula}, 0)`,
       ],
       [
         'from_18_to_60_officer',
         CATEGORIES.from_18_to_60_officer.name,
         CATEGORIES.from_18_to_60_officer.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "from_18_to_60_officer", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "from_18_to_60_officer", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D7/${totalRecordsFormula}, 0)`,
       ],
       [
         'above_60',
         CATEGORIES.above_60.name,
         CATEGORIES.above_60.parentGroupName,
-        `=SUMIF('Danh sách hồ sơ'!D:D, "above_60", 'Danh sách hồ sơ'!G:G)`,
+        `=SUMIF('Danh sách hồ sơ'!E:E, "above_60", 'Danh sách hồ sơ'!H:H)`,
         `=IF(${totalRecordsFormula}>0, D8/${totalRecordsFormula}, 0)`,
       ],
       [

@@ -25,11 +25,12 @@ service cloud.firestore {
 
     // 2. Validation Blueprint for Checkup Records to block "Dirty Dozen" invalid shapes
     function isValidCheckupRecord(data) {
-      return data.keys().hasAll(['id', 'date', 'facility', 'category', 'quantity', 'createdAt', 'userId'])
-        && data.keys().size() <= 9 // id, date, facility, category, quantity, notes, createdAt, syncedAt, userId
+      return data.keys().hasAll(['id', 'date', 'facility', 'managedArea', 'category', 'quantity', 'createdAt', 'userId'])
+        && data.keys().size() <= 10 // id, date, facility, managedArea, category, quantity, notes, createdAt, syncedAt, userId
         && data.id is string && data.id.size() <= 128
         && data.date is string && data.date.size() == 10 && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && data.facility is string && data.facility.size() > 0 && data.facility.size() <= 200
+        && data.managedArea is string && data.managedArea.size() > 0 && data.managedArea.size() <= 200
         && data.category is string && (
           data.category == 'under_6' || 
           data.category == 'from_6_to_18' || 
@@ -70,7 +71,7 @@ service cloud.firestore {
         && incoming().userId == existing().userId
         && incoming().id == existing().id
         && incoming().createdAt == existing().createdAt
-        && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'facility', 'category', 'quantity', 'notes', 'syncedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'facility', 'managedArea', 'category', 'quantity', 'notes', 'syncedAt']);
     }
 
     // 5. Match and protect /targets/{userId}

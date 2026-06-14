@@ -18,6 +18,10 @@
           "type": "string",
           "description": "Tên cơ sở khám sức khỏe đối chiếu"
         },
+        "managedArea": {
+          "type": "string",
+          "description": "Tên địa bàn quản lý kiểm soát"
+        },
         "category": {
           "type": "string",
           "enum": [
@@ -55,6 +59,7 @@
         "id",
         "date",
         "facility",
+        "managedArea",
         "category",
         "quantity",
         "createdAt",

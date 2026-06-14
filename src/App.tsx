@@ -160,6 +160,7 @@ export default function App() {
           id: data.id,
           date: data.date,
           facility: data.facility,
+          managedArea: data.managedArea || '',
           category: data.category,
           quantity: data.quantity,
           notes: data.notes,
@@ -425,7 +426,13 @@ export default function App() {
 
   // Auto-complete list of facility names based on history
   const uniqueFacilities = useMemo(() => {
-    const list = new Set(records.map((r) => r.facility));
+    const list = new Set(records.map((r) => r.facility).filter(Boolean));
+    return Array.from(list);
+  }, [records]);
+
+  // Auto-complete list of managed areas based on history
+  const uniqueManagedAreas = useMemo(() => {
+    const list = new Set(records.map((r) => r.managedArea).filter(Boolean));
     return Array.from(list);
   }, [records]);
 
@@ -690,6 +697,7 @@ export default function App() {
                   <DataEntry 
                     onAddRecord={handleAddRecord} 
                     existingFacilities={uniqueFacilities} 
+                    existingManagedAreas={uniqueManagedAreas}
                     facilityTargets={facilityTargets}
                     onUpdateTarget={updateFacilityTarget}
                   />

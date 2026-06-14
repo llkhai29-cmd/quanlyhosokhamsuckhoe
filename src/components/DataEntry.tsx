@@ -11,6 +11,7 @@ import { FilePlus, Calendar, Landmark, Users, PlusCircle, PenLine, Search, Spark
 interface DataEntryProps {
   onAddRecord: (record: Omit<CheckupRecord, 'id' | 'createdAt'>) => void;
   existingFacilities: string[];
+  existingManagedAreas?: string[];
   facilityTargets?: Record<string, number>;
   onUpdateTarget?: (facilityName: string, targetValue: number) => void;
 }
@@ -18,6 +19,7 @@ interface DataEntryProps {
 export default function DataEntry({ 
   onAddRecord, 
   existingFacilities,
+  existingManagedAreas = [],
   facilityTargets = {},
   onUpdateTarget
 }: DataEntryProps) {
@@ -25,6 +27,7 @@ export default function DataEntry({
     new Date().toLocaleDateString('sv-SE') // Returns YYYY-MM-DD
   );
   const [facility, setFacility] = useState<string>('');
+  const [managedArea, setManagedArea] = useState<string>('');
   const [category, setCategory] = useState<AgeGroup>('under_6');
   const [quantity, setQuantity] = useState<number | ''>('');
   const [notes, setNotes] = useState<string>('');
@@ -53,7 +56,7 @@ export default function DataEntry({
     }
   };
 
-  // Custom autocomplete state
+  // Custom autocomplete state: Facility
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const autocompleteRef = useRef<HTMLDivElement>(null);
@@ -70,11 +73,30 @@ export default function DataEntry({
       .slice(0, 6);
   }, [facility, existingFacilities]);
 
-  // Handle clicking outside the widget to close the suggest list
+  // Custom autocomplete state: Managed Area
+  const [showAreaSuggestions, setShowAreaSuggestions] = useState(false);
+  const [activeAreaIndex, setActiveAreaIndex] = useState(-1);
+  const areaAutocompleteRef = useRef<HTMLDivElement>(null);
+
+  // Filter existing managed areas for suggestion matching based on input string
+  const filteredAreaSuggestions = useMemo(() => {
+    const trimmedInput = managedArea.trim().toLowerCase();
+    if (!trimmedInput) {
+      return existingManagedAreas.slice(0, 5);
+    }
+    return existingManagedAreas
+      .filter((a) => a.toLowerCase().includes(trimmedInput))
+      .slice(0, 6);
+  }, [managedArea, existingManagedAreas]);
+
+  // Handle clicking outside the widgets to close the suggest lists
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (autocompleteRef.current && !autocompleteRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
+      }
+      if (areaAutocompleteRef.current && !areaAutocompleteRef.current.contains(event.target as Node)) {
+        setShowAreaSuggestions(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -118,14 +140,51 @@ export default function DataEntry({
     setActiveIndex(-1);
   };
 
+  const handleAreaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showAreaSuggestions) {
+      if (e.key === 'ArrowDown' && filteredAreaSuggestions.length > 0) {
+        setShowAreaSuggestions(true);
+        setActiveAreaIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      setActiveAreaIndex((prev) => (prev < filteredAreaSuggestions.length - 1 ? prev + 1 : prev));
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      setActiveAreaIndex((prev) => (prev > 0 ? prev - 1 : -1));
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (activeAreaIndex >= 0 && activeAreaIndex < filteredAreaSuggestions.length) {
+        setManagedArea(filteredAreaSuggestions[activeAreaIndex]);
+        setShowAreaSuggestions(false);
+        setActiveAreaIndex(-1);
+        e.preventDefault();
+      }
+    } else if (e.key === 'Escape') {
+      setShowAreaSuggestions(false);
+      setActiveAreaIndex(-1);
+    }
+  };
+
+  const handleSelectAreaSuggestion = (value: string) => {
+    setManagedArea(value);
+    setShowAreaSuggestions(false);
+    setActiveAreaIndex(-1);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!facility.trim()) return;
+    if (!managedArea.trim()) return;
     if (quantity === '' || quantity <= 0) return;
 
     onAddRecord({
       date,
       facility: facility.trim(),
+      managedArea: managedArea.trim(),
       category,
       quantity,
       notes: notes.trim() || undefined,
@@ -170,14 +229,14 @@ export default function DataEntry({
         <div ref={autocompleteRef}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <Landmark className="w-3.5 h-3.5 text-slate-400" />
-            Cơ sở tổ chức khám / Địa bàn quản lý
+            Cơ sở tổ chức khám
           </label>
           <div className="relative">
             <input
               id="input-facility"
               type="text"
               required
-              placeholder="VD: Trung tâm Y tế Quận 1, Trạm Y tế Phường Bến Nghé..."
+              placeholder="VD: Trung tâm Y tế Quận 1, Bệnh viện Quận 3..."
               value={facility}
               onChange={(e) => {
                 setFacility(e.target.value);
@@ -269,6 +328,115 @@ export default function DataEntry({
                   className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
                 >
                   {f}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Managed Area */}
+        <div ref={areaAutocompleteRef}>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+            <Search className="w-3.5 h-3.5 text-slate-400" />
+            Địa bàn quản lý
+          </label>
+          <div className="relative">
+            <input
+              id="input-managed-area"
+              type="text"
+              required
+              placeholder="VD: Quận 1, Quận 3, Phường Bến Nghé..."
+              value={managedArea}
+              onChange={(e) => {
+                setManagedArea(e.target.value);
+                setShowAreaSuggestions(true);
+                setActiveAreaIndex(-1);
+              }}
+              onFocus={() => setShowAreaSuggestions(true)}
+              onKeyDown={handleAreaKeyDown}
+              autoComplete="off"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 pr-10"
+            />
+            {managedArea && (
+              <button
+                type="button"
+                onClick={() => {
+                  setManagedArea('');
+                  setShowAreaSuggestions(true);
+                  setActiveAreaIndex(-1);
+                }}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                id="btn-clear-managed-area"
+              >
+                <span className="text-xs">✕</span>
+              </button>
+            )}
+            
+            <AnimatePresence>
+              {showAreaSuggestions && (filteredAreaSuggestions.length > 0 || managedArea.trim() !== '') && (
+                <motion.div
+                  id="area-autocomplete-dropdown"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-150 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto divide-y divide-slate-50"
+                >
+                  {filteredAreaSuggestions.length > 0 ? (
+                    <div className="p-1">
+                      {filteredAreaSuggestions.map((a, idx) => {
+                        const isHighlighted = idx === activeAreaIndex;
+                        return (
+                          <button
+                            key={a}
+                            id={`area-autocomplete-item-${idx}`}
+                            type="button"
+                            onClick={() => handleSelectAreaSuggestion(a)}
+                            onMouseEnter={() => setActiveAreaIndex(idx)}
+                            className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 border-0 cursor-pointer ${
+                              isHighlighted
+                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Search className={`w-3.5 h-3.5 shrink-0 ${isHighlighted ? 'text-indigo-500' : 'text-slate-400'}`} />
+                              <span className="truncate">{a}</span>
+                            </div>
+                            {isHighlighted && (
+                              <span className="text-[9px] text-indigo-500 font-medium font-sans">Chọn</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : managedArea.trim() !== '' ? (
+                    <div className="p-3.5 text-center">
+                      <p className="text-[11px] font-semibold text-slate-600 flex items-center justify-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>Tên địa bàn mới</span>
+                      </p>
+                      <p className="text-[9.5px] text-slate-400 mt-1 leading-normal">
+                        Hệ thống sẽ lưu địa bàn mới này vào lịch sử thông tin chung sau khi bạn lưu bản ghi.
+                      </p>
+                    </div>
+                  ) : null}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          {existingManagedAreas.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <span className="text-[10px] text-slate-400 self-center">Gợi ý gần đây:</span>
+              {existingManagedAreas.slice(0, 3).map((a, idx) => (
+                <button
+                  id={`suggested-area-${idx}`}
+                  key={idx}
+                  type="button"
+                  onClick={() => setManagedArea(a)}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
+                >
+                  {a}
                 </button>
               ))}
             </div>

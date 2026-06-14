@@ -35,6 +35,7 @@ export default function Dashboard({
   onUpdateTarget 
 }: DashboardProps) {
   const [filterFacility, setFilterFacility] = useState<string>('all');
+  const [filterManagedArea, setFilterManagedArea] = useState<string>('all');
   const [timeRange, setTimeRange] = useState<'all' | 'last_7_days' | 'this_month' | 'last_month'>('all');
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
 
@@ -66,7 +67,13 @@ export default function Dashboard({
 
   // List of unique facilities for filter dropdown
   const facilitiesList = useMemo(() => {
-    const list = new Set(records.map((r) => r.facility));
+    const list = new Set(records.map((r) => r.facility).filter(Boolean));
+    return ['all', ...Array.from(list)];
+  }, [records]);
+
+  // List of unique managed areas for filter dropdown
+  const managedAreasList = useMemo(() => {
+    const list = new Set(records.map((r) => r.managedArea).filter(Boolean));
     return ['all', ...Array.from(list)];
   }, [records]);
 
@@ -75,6 +82,9 @@ export default function Dashboard({
     return records.filter((r) => {
       // Facility filter
       if (filterFacility !== 'all' && r.facility !== filterFacility) return false;
+
+      // Managed Area filter
+      if (filterManagedArea !== 'all' && r.managedArea !== filterManagedArea) return false;
 
       // Time range filter
       if (timeRange !== 'all') {
@@ -99,7 +109,7 @@ export default function Dashboard({
       }
       return true;
     });
-  }, [records, filterFacility, timeRange]);
+  }, [records, filterFacility, filterManagedArea, timeRange]);
 
   // Calculations for KPI Cards
   const stats = useMemo(() => {
@@ -359,25 +369,41 @@ export default function Dashboard({
   return (
     <div className="space-y-6">
       {/* Filters Area */}
-      <div id="dashboard-filters" className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+      <div id="dashboard-filters" className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
         <div className="flex items-center gap-2">
           <LayoutDashboard className="w-5 h-5 text-slate-700" />
           <span className="font-semibold text-slate-800 text-sm">Bộ lọc phân tích</span>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-3.5 w-full lg:w-auto">
           {/* Facility Filter */}
           <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="text-xs text-slate-500 whitespace-nowrap">Địa bàn:</span>
+            <span className="text-xs text-slate-500 whitespace-nowrap">Cơ sở khám:</span>
             <select
               id="filter-facility-select"
               value={filterFacility}
               onChange={(e) => setFilterFacility(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all min-w-[140px]"
+              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all min-w-[130px] max-w-[200px]"
             >
-              <option value="all">Tất cả các cơ sở ({records.length})</option>
+              <option value="all">Tất cả cơ sở khám</option>
               {facilitiesList.filter(f => f !== 'all').map((fac) => (
                 <option key={fac} value={fac}>{fac}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Managed Area Filter */}
+          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+            <span className="text-xs text-slate-500 whitespace-nowrap">Địa bàn quản lý:</span>
+            <select
+              id="filter-managed-area-select"
+              value={filterManagedArea}
+              onChange={(e) => setFilterManagedArea(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all min-w-[130px] max-w-[200px]"
+            >
+              <option value="all">Tất cả địa bàn</option>
+              {managedAreasList.filter(m => m !== 'all').map((area) => (
+                <option key={area} value={area}>{area}</option>
               ))}
             </select>
           </div>

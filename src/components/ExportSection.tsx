@@ -206,7 +206,7 @@ export default function ExportSection({
         '-', 
         '-', 
         { f: 'SUM(F8:F13)', t: 'n', z: '#,##0' }, 
-        { v: currentTarget > 0 ? (achievementRate / 100) : 1.0, t: 'n', z: '0.0%' }
+        { v: reportData.total > 0 ? 1.0 : 0.0, t: 'n', z: '0.0%' }
       ]
     ];
  
@@ -747,7 +747,7 @@ export default function ExportSection({
                   <td colSpan={2} className="py-3 px-2 text-slate-900 font-bold">TỔNG CỘNG HỒ SƠ</td>
                   <td className="py-3 px-2 text-right text-indigo-700 font-mono text-sm">{reportData.total.toLocaleString('vi-VN')}</td>
                   <td className="py-3 px-2 text-right text-indigo-600 font-mono font-bold" id="total-achievement-rate-preview">
-                    {currentTarget > 0 ? `${achievementRate.toFixed(1)}%` : '100%'}
+                    {reportData.total > 0 ? '100.0%' : '0.0%'}
                   </td>
                 </tr>
               </tbody>

@@ -72,6 +72,7 @@ export interface CheckupRecord {
   id: string;
   date: string; // YYYY-MM-DD
   facility: string; // Medical location
+  managedArea: string; // Managed administrative area
   category: AgeGroup;
   quantity: number;
   notes?: string;
