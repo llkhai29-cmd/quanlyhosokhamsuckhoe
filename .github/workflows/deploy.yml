@@ -6,6 +6,9 @@ on:
       - "main"
       - "master"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # Allow this job to clone the repo and push changes to the gh-pages branch
 permissions:
   contents: write

@@ -10,6 +10,7 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'react-is': 'react-is/index.js',
       },
     },
     server: {
