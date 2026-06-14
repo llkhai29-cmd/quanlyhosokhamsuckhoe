@@ -16,8 +16,9 @@ interface SheetResponse {
  */
 export const findExistingSpreadsheet = async (accessToken: string): Promise<SheetResponse | null> => {
   try {
+    const q = encodeURIComponent("name='Quản lý Hồ sơ Khám sức khỏe' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
     const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='Quản lý Hồ sơ Khám sức khỏe' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false&fields=files(id,name,webViewLink)`,
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,webViewLink)`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -144,8 +145,9 @@ export const syncRecordsToSpreadsheet = async (
     const valuesToUpload = [headerRow, ...recordsRows];
 
     // Clear 'Danh sách hồ sơ' completely
+    const rangeRecordsClear = encodeURIComponent('Danh sách hồ sơ!A1:Z5000');
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Danh sách hồ sơ!A1:Z5000:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${rangeRecordsClear}:clear`,
       {
         method: 'POST',
         headers: {
@@ -155,8 +157,9 @@ export const syncRecordsToSpreadsheet = async (
     );
 
     // Save records data
+    const rangeRecordsUpdate = encodeURIComponent('Danh sách hồ sơ!A1');
     const updateRecordsRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Danh sách hồ sơ!A1?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${rangeRecordsUpdate}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -242,8 +245,9 @@ export const syncRecordsToSpreadsheet = async (
     const summaryValues = [summaryHeaders, ...summaryRows];
 
     // Clear 'Báo cáo tổng hợp' completely
+    const rangeSummaryClear = encodeURIComponent('Báo cáo tổng hợp!A1:Z100');
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Báo cáo tổng hợp!A1:Z100:clear`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${rangeSummaryClear}:clear`,
       {
         method: 'POST',
         headers: {
@@ -253,8 +257,9 @@ export const syncRecordsToSpreadsheet = async (
     );
 
     // Write summary templates and formulas
+    const rangeSummaryUpdate = encodeURIComponent('Báo cáo tổng hợp!A1');
     const updateSummaryRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Báo cáo tổng hợp!A1?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${rangeSummaryUpdate}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
