@@ -3,16 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES, AgeGroup, CheckupRecord } from '../types';
-import { FilePlus, Calendar, Landmark, Users, PlusCircle, PenLine } from 'lucide-react';
+import { FilePlus, Calendar, Landmark, Users, PlusCircle, PenLine, Search, Sparkles, Target } from 'lucide-react';
 
 interface DataEntryProps {
   onAddRecord: (record: Omit<CheckupRecord, 'id' | 'createdAt'>) => void;
   existingFacilities: string[];
+  facilityTargets?: Record<string, number>;
+  onUpdateTarget?: (facilityName: string, targetValue: number) => void;
 }
 
-export default function DataEntry({ onAddRecord, existingFacilities }: DataEntryProps) {
+export default function DataEntry({ 
+  onAddRecord, 
+  existingFacilities,
+  facilityTargets = {},
+  onUpdateTarget
+}: DataEntryProps) {
   const [date, setDate] = useState<string>(
     new Date().toLocaleDateString('sv-SE') // Returns YYYY-MM-DD
   );
@@ -21,6 +29,94 @@ export default function DataEntry({ onAddRecord, existingFacilities }: DataEntry
   const [quantity, setQuantity] = useState<number | ''>('');
   const [notes, setNotes] = useState<string>('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  // Facility Target State & Effect to load from prop
+  const targetForCurrentFacility = useMemo(() => {
+    const trimmed = facility.trim();
+    if (!trimmed) return 0;
+    return facilityTargets[trimmed] || 0;
+  }, [facility, facilityTargets]);
+
+  const [localTargetValue, setLocalTargetValue] = useState<string>('');
+
+  useEffect(() => {
+    setLocalTargetValue(targetForCurrentFacility > 0 ? String(targetForCurrentFacility) : '');
+  }, [targetForCurrentFacility]);
+
+  const handleLocalTargetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalTargetValue(val);
+    const parsed = parseInt(val, 10);
+    const finalValue = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+    if (onUpdateTarget && facility.trim()) {
+      onUpdateTarget(facility.trim(), finalValue);
+    }
+  };
+
+  // Custom autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  // Filter existing facilities for suggestion matching based on input string
+  const filteredSuggestions = useMemo(() => {
+    const trimmedInput = facility.trim().toLowerCase();
+    if (!trimmedInput) {
+      // If blank, suggest top 5 most recently used
+      return existingFacilities.slice(0, 5);
+    }
+    return existingFacilities
+      .filter((f) => f.toLowerCase().includes(trimmedInput))
+      .slice(0, 6);
+  }, [facility, existingFacilities]);
+
+  // Handle clicking outside the widget to close the suggest list
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) {
+      if (e.key === 'ArrowDown' && filteredSuggestions.length > 0) {
+        setShowSuggestions(true);
+        setActiveIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      setActiveIndex((prev) => (prev < filteredSuggestions.length - 1 ? prev + 1 : prev));
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      setActiveIndex((prev) => (prev > 0 ? prev - 1 : -1));
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
+        setFacility(filteredSuggestions[activeIndex]);
+        setShowSuggestions(false);
+        setActiveIndex(-1);
+        e.preventDefault();
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setActiveIndex(-1);
+    }
+  };
+
+  const handleSelectSuggestion = (value: string) => {
+    setFacility(value);
+    setShowSuggestions(false);
+    setActiveIndex(-1);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +167,7 @@ export default function DataEntry({ onAddRecord, existingFacilities }: DataEntry
         </div>
 
         {/* Facility */}
-        <div>
+        <div ref={autocompleteRef}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <Landmark className="w-3.5 h-3.5 text-slate-400" />
             Cơ sở tổ chức khám / Địa bàn quản lý
@@ -83,15 +179,83 @@ export default function DataEntry({ onAddRecord, existingFacilities }: DataEntry
               required
               placeholder="VD: Trung tâm Y tế Quận 1, Trạm Y tế Phường Bến Nghé..."
               value={facility}
-              onChange={(e) => setFacility(e.target.value)}
-              list="facilities-list"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+              onChange={(e) => {
+                setFacility(e.target.value);
+                setShowSuggestions(true);
+                setActiveIndex(-1);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 pr-10"
             />
-            <datalist id="facilities-list">
-              {existingFacilities.map((f, i) => (
-                <option key={i} value={f} />
-              ))}
-            </datalist>
+            {facility && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFacility('');
+                  setShowSuggestions(true);
+                  setActiveIndex(-1);
+                }}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                id="btn-clear-facility"
+              >
+                <span className="text-xs">✕</span>
+              </button>
+            )}
+            
+            <AnimatePresence>
+              {showSuggestions && (filteredSuggestions.length > 0 || facility.trim() !== '') && (
+                <motion.div
+                  id="autocomplete-dropdown"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-150 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto divide-y divide-slate-50"
+                >
+                  {filteredSuggestions.length > 0 ? (
+                    <div className="p-1">
+                      {filteredSuggestions.map((f, idx) => {
+                        const isHighlighted = idx === activeIndex;
+                        return (
+                          <button
+                            key={f}
+                            id={`autocomplete-item-${idx}`}
+                            type="button"
+                            onClick={() => handleSelectSuggestion(f)}
+                            onMouseEnter={() => setActiveIndex(idx)}
+                            className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 border-0 cursor-pointer ${
+                              isHighlighted
+                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Landmark className={`w-3.5 h-3.5 shrink-0 ${isHighlighted ? 'text-indigo-500' : 'text-slate-400'}`} />
+                              <span className="truncate">{f}</span>
+                            </div>
+                            {isHighlighted && (
+                              <span className="text-[9px] text-indigo-500 font-medium font-sans">Chọn</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : facility.trim() !== '' ? (
+                    <div className="p-3.5 text-center">
+                      <p className="text-[11px] font-semibold text-slate-600 flex items-center justify-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>Tên cơ sở y tế mới</span>
+                      </p>
+                      <p className="text-[9.5px] text-slate-400 mt-1 leading-normal">
+                        Hệ thống sẽ lưu cơ sở mới này vào lịch sử thông tin chung sau khi bạn lưu bản ghi.
+                      </p>
+                    </div>
+                  ) : null}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           {existingFacilities.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -102,13 +266,51 @@ export default function DataEntry({ onAddRecord, existingFacilities }: DataEntry
                   key={idx}
                   type="button"
                   onClick={() => setFacility(f)}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
                 >
                   {f}
                 </button>
               ))}
             </div>
           )}
+        </div>
+
+        {/* Facility Target Input */}
+        <div className="p-3.5 bg-slate-50/50 border border-slate-150 rounded-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label htmlFor="facility-target-input" className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-indigo-500 shrink-0" />
+                Chỉ tiêu tuyển sinh/khám của cơ sở:
+              </label>
+              {facility.trim() !== '' ? (
+                <p className="text-[10px] text-slate-500 mt-0.5 leading-normal">
+                  Số lượng hồ sơ chỉ tiêu giao cho <span className="font-semibold text-indigo-600">"{facility.trim()}"</span>. Hệ thống sẽ cập nhật tự động.
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                  Chỉ tiêu sẽ được liên kết sau khi bạn chọn hoặc nhập <span className="font-semibold text-slate-500">tên cơ sở y tế</span> ở mục trên.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+              <input
+                id="facility-target-input"
+                type="number"
+                min="0"
+                placeholder={facility.trim() !== '' ? "Nhập chỉ tiêu" : "Chưa có cơ sở..."}
+                disabled={facility.trim() === ''}
+                value={localTargetValue}
+                onChange={handleLocalTargetChange}
+                className={`w-28 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono text-center focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all ${
+                  facility.trim() !== ''
+                    ? 'bg-white border border-indigo-200 text-slate-800'
+                    : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              />
+              <span className={`text-[10.5px] font-medium ${facility.trim() !== '' ? 'text-slate-500' : 'text-slate-400'}`}>hồ sơ</span>
+            </div>
+          </div>
         </div>
 
         {/* Categories Selection with detailed subdivisions */}

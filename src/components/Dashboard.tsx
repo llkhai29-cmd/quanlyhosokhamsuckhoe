@@ -18,17 +18,51 @@ import {
   YAxis, 
   CartesianGrid, 
   AreaChart, 
-  Area 
+  Area,
+  ReferenceLine
 } from 'recharts';
-import { LayoutDashboard, TrendingUp, Users, Calendar, Landmark, Percent, BarChart3, CheckSquare, Square, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Users, Calendar, Landmark, Percent, BarChart3, CheckSquare, Square, SlidersHorizontal, Search, Edit2, Target } from 'lucide-react';
 
 interface DashboardProps {
   records: CheckupRecord[];
+  facilityTargets?: Record<string, number>;
+  onUpdateTarget?: (facilityName: string, targetValue: number) => void;
 }
 
-export default function Dashboard({ records }: DashboardProps) {
+export default function Dashboard({ 
+  records, 
+  facilityTargets = {}, 
+  onUpdateTarget 
+}: DashboardProps) {
   const [filterFacility, setFilterFacility] = useState<string>('all');
   const [timeRange, setTimeRange] = useState<'all' | 'last_7_days' | 'this_month' | 'last_month'>('all');
+  const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
+
+  // Inline targets editing state
+  const [editingFacility, setEditingFacility] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
+
+  const startEditing = (facilityName: string, currentValue: number) => {
+    setEditingFacility(facilityName);
+    setEditingValue(currentValue > 0 ? String(currentValue) : '');
+  };
+
+  const saveTarget = (facilityName: string) => {
+    const val = parseInt(editingValue, 10);
+    const finalValue = isNaN(val) || val < 0 ? 0 : val;
+    if (onUpdateTarget) {
+      onUpdateTarget(facilityName, finalValue);
+    }
+    setEditingFacility(null);
+  };
+
+  const handleTargetKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, facilityName: string) => {
+    if (e.key === 'Enter') {
+      saveTarget(facilityName);
+    } else if (e.key === 'Escape') {
+      setEditingFacility(null);
+    }
+  };
 
   // List of unique facilities for filter dropdown
   const facilitiesList = useMemo(() => {
@@ -233,6 +267,81 @@ export default function Dashboard({ records }: DashboardProps) {
     }).sort((a, b) => b['Tổng cộng'] - a['Tổng cộng']);
   }, [records, selectedComparisonFacilities, timeRange]);
 
+  // Aggregate statistics for all facilities based on current active filters
+  const facilityTableData = useMemo(() => {
+    const facilityMap: Record<string, {
+      facility: string;
+      under6: number;
+      from6to18: number;
+      from18to60: number;
+      above60: number;
+      total: number;
+    }> = {};
+
+    filteredRecords.forEach((r) => {
+      if (!r.facility) return;
+      
+      if (!facilityMap[r.facility]) {
+        facilityMap[r.facility] = {
+          facility: r.facility,
+          under6: 0,
+          from6to18: 0,
+          from18to60: 0,
+          above60: 0,
+          total: 0,
+        };
+      }
+
+      const item = facilityMap[r.facility];
+      item.total += r.quantity;
+      
+      const cat = CATEGORIES[r.category];
+      if (cat.parentGroup === '0_6') item.under6 += r.quantity;
+      else if (cat.parentGroup === '6_18') item.from6to18 += r.quantity;
+      else if (cat.parentGroup === '18_60') item.from18to60 += r.quantity;
+      else if (cat.parentGroup === '60_plus') item.above60 += r.quantity;
+    });
+
+    return Object.values(facilityMap).sort((a, b) => b.total - a.total);
+  }, [filteredRecords]);
+
+  const totalAllFacilities = useMemo(() => {
+    return facilityTableData.reduce((sum, item) => sum + item.total, 0);
+  }, [facilityTableData]);
+
+  // Filtered rows for the facility stats table
+  const searchedTableData = useMemo(() => {
+    return facilityTableData.filter(item => 
+      item.facility.toLowerCase().includes(tableSearchQuery.toLowerCase().trim())
+    );
+  }, [facilityTableData, tableSearchQuery]);
+
+  // Sum of targets set for active/filtered facilities
+  const activeTargetSum = useMemo(() => {
+    if (filterFacility !== 'all') {
+      return facilityTargets[filterFacility] || 0;
+    }
+    const uniqueFacs = Array.from(new Set(records.map(r => r.facility).filter(Boolean)));
+    return uniqueFacs.reduce((sum, f) => sum + (facilityTargets[f] || 0), 0);
+  }, [records, facilityTargets, filterFacility]);
+
+  // Completion rate comparison data for selected facilities
+  const completionRateData = useMemo(() => {
+    return selectedComparisonFacilities.map((facility) => {
+      const found = facilityTableData.find(item => item.facility === facility);
+      const total = found ? found.total : 0;
+      const target = facilityTargets[facility] || 0;
+      const percent = target > 0 ? parseFloat(((total / target) * 100).toFixed(1)) : 0;
+      
+      return {
+        facility,
+        'Tỷ lệ hoàn thành (%)': percent,
+        'Tổng hồ sơ': total,
+        'Chỉ tiêu': target,
+      };
+    }).sort((a, b) => b['Tỷ lệ hoàn thành (%)'] - a['Tỷ lệ hoàn thành (%)']);
+  }, [facilityTableData, selectedComparisonFacilities, facilityTargets]);
+
   if (records.length === 0) {
     return (
       <div id="dashboard-empty-state" className="bg-white rounded-2xl border border-slate-150 p-8 text-center flex flex-col items-center justify-center min-h-[400px]">
@@ -292,14 +401,39 @@ export default function Dashboard({ records }: DashboardProps) {
       </div>
 
       {/* KPI Cards Area */}
-      <div id="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="dashboard-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {/* Total Card */}
-        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
+        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
           <p className="text-[10px] uppercase font-semibold text-slate-300 tracking-wider">Tổng cộng hồ sơ</p>
           <p className="text-2xl font-bold font-mono mt-1">{stats.total.toLocaleString('vi-VN')}</p>
           <p className="text-[10px] text-slate-400 mt-2">Toàn hệ thống</p>
           <div className="absolute right-3 bottom-3 opacity-15">
             <Users className="w-10 h-10" />
+          </div>
+        </div>
+
+        {/* Overall Target Achievement Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Tiến độ chỉ tiêu</span>
+              <Target className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            </div>
+            <p className="text-xl font-bold font-mono text-indigo-600 font-sans">
+              {activeTargetSum > 0 ? `${((stats.total / activeTargetSum) * 100).toFixed(1)}%` : '0.0%'}
+            </p>
+          </div>
+          <div className="mt-2 space-y-1">
+            <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+              <div 
+                className="bg-indigo-600 h-1 rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min(100, activeTargetSum > 0 ? (stats.total / activeTargetSum) * 100 : 0)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] text-slate-400 font-mono">
+              <span>Đạt: {stats.total.toLocaleString('vi-VN')}</span>
+              <span>CT: {activeTargetSum.toLocaleString('vi-VN')}</span>
+            </div>
           </div>
         </div>
 
@@ -356,15 +490,15 @@ export default function Dashboard({ records }: DashboardProps) {
         </div>
       </div>
 
-      {/* Section: Facility Comparison Bar Chart */}
+      {/* Section: Facility Comparison Card */}
       <div id="facility-comparison-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-5">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-indigo-500" />
-              <h3 className="text-sm font-bold text-slate-900">So sánh Số liệu hồ sơ giữa các Cơ sở Y tế</h3>
+              <h3 className="text-sm font-bold text-slate-900">Đối chiếu Chỉ số & Hiệu suất giữa các Cơ sở Y tế</h3>
             </div>
-            <p className="text-xs text-slate-500 mt-1">So sánh trực quan tỷ trọng nhóm tuổi chỉ định khám sức khỏe định kỳ giữa các địa bàn cơ sở.</p>
+            <p className="text-xs text-slate-500 mt-1">So sánh trực quan cơ cấu đối tượng và tỷ lệ phần trăm hoàn thành chỉ tiêu đề ra giữa các địa bàn cơ sở.</p>
           </div>
 
           {/* Mode Switcher */}
@@ -450,68 +584,315 @@ export default function Dashboard({ records }: DashboardProps) {
           </div>
         </div>
 
-        {/* Chart Window */}
-        <div className="h-[320px] pt-2">
-          {selectedComparisonFacilities.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 p-6">
-              <div className="p-3 bg-slate-50 rounded-full text-slate-400 mb-2">
-                <BarChart3 className="w-8 h-8 stroke-1" />
-              </div>
-              <p className="text-slate-600 text-xs font-semibold">Không có cơ sở nào được chọn để đối sánh</p>
-              <p className="text-slate-400 text-[10px] mt-1 max-w-xs">Chọn một hoặc nhiều cơ sở y tế ở bảng bộ lọc phía trên để hiển thị biểu đồ đối chiếu.</p>
+        {/* Dynamic Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+          
+          {/* Chart Left: Demographic Grouping Structure */}
+          <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
+            <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-blue-500" />
+              <span>Cơ cấu Đối tượng & Nhóm tuổi</span>
+            </h4>
+            <div className="h-[280px]">
+              {selectedComparisonFacilities.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                  <p className="text-slate-400 text-xs">Chưa chọn cơ sở để hiển thị biểu đồ</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={comparisonData}
+                    margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="facility" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                      formatter={(value, name) => [`${value.toLocaleString('vi-VN')} hồ sơ`, name]}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={32}
+                      iconType="circle"
+                      iconSize={6}
+                      wrapperStyle={{ fontSize: '10px', paddingBottom: '8px' }}
+                    />
+                    <Bar
+                      dataKey="Dưới 6 tuổi"
+                      stackId={compareMode === 'stacked' ? 'a' : undefined}
+                      fill="#3b82f6"
+                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                      barSize={compareMode === 'stacked' ? 36 : 8}
+                    />
+                    <Bar
+                      dataKey="Từ 6-18 tuổi"
+                      stackId={compareMode === 'stacked' ? 'a' : undefined}
+                      fill="#06b6d4"
+                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                      barSize={compareMode === 'stacked' ? 36 : 8}
+                    />
+                    <Bar
+                      dataKey="Từ 18-60 tuổi"
+                      stackId={compareMode === 'stacked' ? 'a' : undefined}
+                      fill="#10b981"
+                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                      barSize={compareMode === 'stacked' ? 36 : 8}
+                    />
+                    <Bar
+                      dataKey="Từ 60 tuổi trở lên"
+                      stackId={compareMode === 'stacked' ? 'a' : undefined}
+                      fill="#ec4899"
+                      radius={compareMode === 'stacked' ? [3, 3, 0, 0] : [3, 3, 0, 0]}
+                      barSize={compareMode === 'stacked' ? 36 : 8}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={comparisonData}
-                margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="facility" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                  formatter={(value, name) => [`${value.toLocaleString('vi-VN')} hồ sơ`, name]}
-                />
-                <Legend
-                  verticalAlign="top"
-                  height={36}
-                  iconType="circle"
-                  iconSize={8}
-                  wrapperStyle={{ fontSize: '11px', paddingBottom: '10px' }}
-                />
-                <Bar
-                  dataKey="Dưới 6 tuổi"
-                  stackId={compareMode === 'stacked' ? 'a' : undefined}
-                  fill="#3b82f6"
-                  radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [4, 4, 0, 0]}
-                  barSize={compareMode === 'stacked' ? 44 : 10}
-                />
-                <Bar
-                  dataKey="Từ 6-18 tuổi"
-                  stackId={compareMode === 'stacked' ? 'a' : undefined}
-                  fill="#06b6d4"
-                  radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [4, 4, 0, 0]}
-                  barSize={compareMode === 'stacked' ? 44 : 10}
-                />
-                <Bar
-                  dataKey="Từ 18-60 tuổi"
-                  stackId={compareMode === 'stacked' ? 'a' : undefined}
-                  fill="#10b981"
-                  radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [4, 4, 0, 0]}
-                  barSize={compareMode === 'stacked' ? 44 : 10}
-                />
-                <Bar
-                  dataKey="Từ 60 tuổi trở lên"
-                  stackId={compareMode === 'stacked' ? 'a' : undefined}
-                  fill="#ec4899"
-                  radius={compareMode === 'stacked' ? [4, 4, 0, 0] : [4, 4, 0, 0]}
-                  barSize={compareMode === 'stacked' ? 44 : 10}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          </div>
+
+          {/* Chart Right: Completion Rate Comparison */}
+          <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
+            <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Tiến độ Hoàn thành Chỉ tiêu (%)</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal">Mốc chuẩn: 100%</span>
+            </h4>
+            <div className="h-[280px]">
+              {selectedComparisonFacilities.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                  <p className="text-slate-400 text-xs">Chưa chọn cơ sở để hiển thị biểu đồ</p>
+                </div>
+              ) : completionRateData.every(item => item['Chỉ tiêu'] === 0) ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-5">
+                  <Target className="w-8 h-8 text-slate-300 stroke-1 mb-2 animate-bounce" />
+                  <p className="text-slate-600 text-xs font-semibold">Chưa thiết lập chỉ tiêu</p>
+                  <p className="text-slate-400 text-[10px] mt-1 max-w-xs leading-normal">
+                    Thiết lập chỉ tiêu cho các cơ sở y tế ở cột "Chỉ tiêu" của bảng tổng hợp phía dưới để kích hoạt so sánh hiệu suất hoàn thành.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={completionRateData}
+                    margin={{ top: 15, right: 10, left: -25, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="facility" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" unit="%" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                      formatter={(value, name) => {
+                        if (name === 'Tỷ lệ hoàn thành (%)') {
+                          return [`${value}%`, 'Tỷ lệ hoạt đạt'];
+                        }
+                        return [value, name];
+                      }}
+                    />
+                    <ReferenceLine y={100} stroke="#10b981" strokeDasharray="4 4" label={{ value: 'Đạt 100%', fill: '#10b981', fontSize: 8, position: 'top' }} />
+                    <Bar
+                      dataKey="Tỷ lệ hoàn thành (%)"
+                      fill="#6366f1"
+                      radius={[4, 4, 0, 0]}
+                      barSize={36}
+                    >
+                      {completionRateData.map((entry, index) => {
+                        const pct = entry['Tỷ lệ hoàn thành (%)'];
+                        const color = pct >= 100 
+                          ? '#10b981' 
+                          : pct >= 75 
+                            ? '#6366f1' 
+                            : pct >= 40 
+                              ? '#3b82f6' 
+                              : '#f59e0b';
+                        return <Cell key={`cell-${index}`} fill={color} />;
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
         </div>
+      </div>
+
+      {/* Section: Facility Statistical Summary Table */}
+      <div id="facility-summary-table-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-900">Bảng Tổng hợp Số liệu & Hiệu suất theo Cơ sở</h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Thống kê chi tiết tổng lượng hồ sơ thu nhận thực tế và cơ cấu của từng đơn vị cơ sở khám sức khỏe.
+            </p>
+          </div>
+          
+          {/* Table Search */}
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Tìm nhanh tên cơ sở..."
+              value={tableSearchQuery}
+              onChange={(e) => setTableSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 transition-all placeholder:text-slate-400"
+            />
+          </div>
+        </div>
+
+        {searchedTableData.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-150">
+            Không tìm thấy cơ sở y tế nào phù hợp với từ khóa "{tableSearchQuery}".
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider text-[9px] select-none">
+                <tr>
+                  <th className="px-4 py-3 text-center w-12">Hạng</th>
+                  <th className="px-4 py-3">Cơ sở y tế</th>
+                  <th className="px-4 py-3 text-right">Dưới 6 tuổi</th>
+                  <th className="px-4 py-3 text-right">Từ 6-18 tuổi</th>
+                  <th className="px-4 py-3 text-right">Từ 18-60 tuổi</th>
+                  <th className="px-4 py-3 text-right">Trên 60 tuổi</th>
+                  <th className="px-4 py-3 text-right font-bold w-24">Tổng cộng</th>
+                  <th className="px-4 py-3 text-center w-28">Chỉ tiêu</th>
+                  <th className="px-4 py-3 text-center w-28">Tỷ lệ Đạt</th>
+                  <th className="px-4 py-3 text-center w-24">% Đóng góp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {searchedTableData.map((item, index) => {
+                  const contributionPercent = totalAllFacilities > 0 
+                    ? ((item.total / totalAllFacilities) * 100) 
+                    : 0;
+                  
+                  const targetValue = facilityTargets[item.facility] || 0;
+                  const achRate = targetValue > 0 ? (item.total / targetValue) * 105 : 0; // standard ratio but capped visual representation as per standard formula: (total / target) * 100
+                  const rawAchRate = targetValue > 0 ? (item.total / targetValue) * 100 : 0;
+                  const isEditing = editingFacility === item.facility;
+                  
+                  return (
+                    <tr key={item.facility} className="hover:bg-slate-50/50 transition-colors group">
+                      {/* Rank badge */}
+                      <td className="px-4 py-3.5 text-center">
+                        {index === 0 ? (
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
+                            1
+                          </span>
+                        ) : index === 1 ? (
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                            2
+                          </span>
+                        ) : index === 2 ? (
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-50 text-orange-700 font-bold border border-orange-200">
+                            3
+                          </span>
+                        ) : (
+                          <span className="font-mono text-slate-400">{index + 1}</span>
+                        )}
+                      </td>
+                      
+                      {/* Facility info */}
+                      <td className="px-4 py-3.5 font-medium text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Landmark className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-xs">{item.facility}</span>
+                        </div>
+                      </td>
+                      
+                      {/* Sub-groups */}
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-600">
+                        {item.under6.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-600">
+                        {item.from6to18.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-600">
+                        {item.from18to60.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-600">
+                        {item.above60.toLocaleString('vi-VN')}
+                      </td>
+                      
+                      {/* Total sum */}
+                      <td className="px-4 py-3.5 text-right font-bold text-slate-900 font-mono">
+                        {item.total.toLocaleString('vi-VN')}
+                      </td>
+                      
+                      {/* Targets (Chỉ tiêu) */}
+                      <td className="px-4 py-3.5 text-center font-mono">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center">
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => saveTarget(item.facility)}
+                              onKeyDown={(e) => handleTargetKeyDown(e, item.facility)}
+                              className="w-20 px-1.5 py-1 text-center bg-white border border-indigo-300 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-slate-800 font-bold font-mono"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditing(item.facility, targetValue)}
+                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-all text-slate-600 hover:text-indigo-600 font-medium cursor-pointer w-full text-center"
+                            title="Đặt / sửa Chỉ tiêu"
+                          >
+                            <Target className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="text-xs font-semibold">{targetValue > 0 ? targetValue.toLocaleString('vi-VN') : 'Đặt...'}</span>
+                            <Edit2 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 shrink-0 select-none transition-opacity" />
+                          </button>
+                        )}
+                      </td>
+
+                      {/* Achievement rate (Tỷ lệ Đạt) */}
+                      <td className="px-4 py-3.5 font-mono text-center">
+                        {targetValue > 0 ? (
+                          <div className="flex flex-col items-center gap-1 select-none">
+                            <span className={`font-bold text-[10.5px] ${rawAchRate >= 100 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                              {rawAchRate.toFixed(1)}%
+                            </span>
+                            <div className="w-20 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className={`h-1.5 rounded-full transition-all duration-500 ${rawAchRate >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                style={{ width: `${Math.min(100, rawAchRate)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs">-</span>
+                        )}
+                      </td>
+
+                      {/* Contribution percentage progress bar */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-col items-center gap-1 select-none">
+                          <span className="font-semibold text-slate-700 font-mono text-[10px]">{contributionPercent.toFixed(1)}%</span>
+                          <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                            <div 
+                              className="bg-indigo-600 h-1 rounded-full transition-all duration-500" 
+                              style={{ width: `${contributionPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Main Charts Row */}

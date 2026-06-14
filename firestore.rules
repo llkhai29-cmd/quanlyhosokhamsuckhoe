@@ -72,5 +72,10 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'facility', 'category', 'quantity', 'notes', 'syncedAt']);
     }
+
+    // 5. Match and protect /targets/{userId}
+    match /targets/{userId} {
+      allow read, write: if isSignedIn() && userId == request.auth.uid;
+    }
   }
 }

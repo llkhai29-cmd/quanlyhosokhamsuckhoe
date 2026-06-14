@@ -6,11 +6,12 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckupRecord, CATEGORIES, AgeGroup } from '../types';
-import { Search, Trash2, CheckCircle2, AlertCircle, FileSpreadsheet, Calendar, MapPin, Tag, AlertTriangle, X } from 'lucide-react';
+import { Search, Trash2, CheckCircle2, AlertCircle, FileSpreadsheet, Calendar, MapPin, Tag, AlertTriangle, X, Pencil } from 'lucide-react';
 
 interface RecordHistoryProps {
   records: CheckupRecord[];
   onDeleteRecord: (id: string) => void;
+  onUpdateRecord: (updated: CheckupRecord) => void;
   onSyncNow?: () => void;
   isSyncing: boolean;
   sheetsUrl: string | null;
@@ -19,6 +20,7 @@ interface RecordHistoryProps {
 export default function RecordHistory({ 
   records, 
   onDeleteRecord, 
+  onUpdateRecord,
   onSyncNow, 
   isSyncing,
   sheetsUrl 
@@ -26,6 +28,43 @@ export default function RecordHistory({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | AgeGroup>('all');
   const [recordToDelete, setRecordToDelete] = useState<CheckupRecord | null>(null);
+
+  // States & handlers for updating record information
+  const [recordToEdit, setRecordToEdit] = useState<CheckupRecord | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editFacility, setEditFacility] = useState('');
+  const [editCategory, setEditCategory] = useState<AgeGroup>('under_6');
+  const [editQuantity, setEditQuantity] = useState<number>(1);
+  const [editNotes, setEditNotes] = useState('');
+
+  const handleEditClick = (record: CheckupRecord) => {
+    setRecordToEdit(record);
+    setEditDate(record.date);
+    setEditFacility(record.facility);
+    setEditCategory(record.category);
+    setEditQuantity(record.quantity);
+    setEditNotes(record.notes || '');
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordToEdit) return;
+    if (!editDate) return;
+    if (!editFacility.trim()) return;
+    if (editQuantity <= 0) return;
+
+    onUpdateRecord({
+      ...recordToEdit,
+      date: editDate,
+      facility: editFacility.trim(),
+      category: editCategory,
+      quantity: editQuantity,
+      notes: editNotes.trim() || undefined,
+      syncedAt: undefined, // Clear synced status so it registers for next sync trigger
+    });
+
+    setRecordToEdit(null);
+  };
 
   const handleDelete = (record: CheckupRecord) => {
     setRecordToDelete(record);
@@ -214,14 +253,24 @@ export default function RecordHistory({
 
                     {/* Actions */}
                     <td className="py-3 px-2 text-right whitespace-nowrap">
-                      <button
-                        id={`btn-delete-${record.id}`}
-                        onClick={() => handleDelete(record)}
-                        className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 transition-all"
-                        title="Xóa bản ghi"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          id={`btn-edit-${record.id}`}
+                          onClick={() => handleEditClick(record)}
+                          className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-slate-100 transition-all cursor-pointer"
+                          title="Sửa bản ghi"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          id={`btn-delete-${record.id}`}
+                          onClick={() => handleDelete(record)}
+                          className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 transition-all cursor-pointer"
+                          title="Xóa bản ghi"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -342,6 +391,136 @@ export default function RecordHistory({
                 Xác nhận xóa
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {recordToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop mapping */}
+          <motion.div
+            id="edit-record-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setRecordToEdit(null)}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
+          />
+
+          {/* Modal Container */}
+          <motion.div
+            id="edit-record-dialog"
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0.15 }}
+            className="relative w-full max-w-lg bg-white rounded-2xl p-6 shadow-xl border border-slate-100 overflow-hidden z-10"
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              id="btn-close-edit-dialog"
+              onClick={() => setRecordToEdit(null)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className="p-3 bg-indigo-50 rounded-full text-indigo-600 shrink-0">
+                <Pencil className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="font-bold text-slate-950 text-base">Cập nhật thông tin bản ghi</h3>
+                <p className="text-xs text-slate-500">Chỉnh sửa thông tin số liệu đã nhập có sai sót</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              {/* Row 1: Date & Facility */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Ngày khám:</label>
+                  <input
+                    type="date"
+                    required
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Cơ sở khám / Địa bàn:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Tên cơ sở y tế"
+                    value={editFacility}
+                    onChange={(e) => setEditFacility(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Category & Quantity */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Nhóm đối tượng tuổi:</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value as AgeGroup)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 cursor-pointer"
+                  >
+                    {Object.entries(CATEGORIES).map(([key, value]) => (
+                      <option key={key} value={key}>
+                        {value.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Số lượng hồ sơ khám:</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold font-mono text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notes field */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Ghi chú bổ sung:</label>
+                <textarea
+                  placeholder="Điền ghi chú (ví dụ: đợt khám bổ sung, thông tin đặc biệt...)"
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 resize-none"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  id="btn-cancel-edit"
+                  onClick={() => setRecordToEdit(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-50 border border-slate-200 rounded-xl transition-all cursor-pointer active:scale-97"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  id="btn-confirm-edit-save"
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-transparent rounded-xl shadow-sm hover:shadow-indigo-500/10 transition-all cursor-pointer active:scale-97 flex items-center gap-1.5"
+                >
+                   Cập nhật số liệu
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

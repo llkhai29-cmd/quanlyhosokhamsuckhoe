@@ -33,6 +33,7 @@ import {
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'entry' | 'history' | 'export'>('dashboard');
   const [records, setRecords] = useState<CheckupRecord[]>([]);
+  const [facilityTargets, setFacilityTargets] = useState<Record<string, number>>({});
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -47,6 +48,62 @@ export default function App() {
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Real-time Firestore targets sync when authenticated
+  useEffect(() => {
+    if (!user) {
+      const savedTargets = localStorage.getItem('health_checkup_facility_targets');
+      if (savedTargets) {
+        try {
+          setFacilityTargets(JSON.parse(savedTargets));
+        } catch (e) {
+          console.error('Lỗi khi đọc LocalStorage targets:', e);
+        }
+      } else {
+        setFacilityTargets({});
+      }
+      return;
+    }
+
+    const docRef = doc(db, 'targets', user.uid);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const targets = data.facilityTargets || {};
+        setFacilityTargets(targets);
+        localStorage.setItem('health_checkup_facility_targets', JSON.stringify(targets));
+      } else {
+        setFacilityTargets({});
+      }
+    }, (error) => {
+      console.error('Lỗi khi lắng nghe Firestore targets:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Update target for a single health facility
+  const updateFacilityTarget = async (facilityName: string, targetValue: number) => {
+    const updatedTargets = {
+      ...facilityTargets,
+      [facilityName]: Math.max(0, targetValue),
+    };
+    
+    setFacilityTargets(updatedTargets);
+    localStorage.setItem('health_checkup_facility_targets', JSON.stringify(updatedTargets));
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'targets', user.uid), {
+          userId: user.uid,
+          facilityTargets: updatedTargets,
+          updatedAt: Date.now(),
+        });
+      } catch (error) {
+        console.error('Lỗi khi lưu chỉ tiêu lên Firestore:', error);
+      }
+    }
+  };
 
   // Migrate raw offline records from LocalStorage to Firestore upon logging in
   const syncOfflineRecordsToFirestore = async (currentUser: User) => {
@@ -339,6 +396,33 @@ export default function App() {
     }
   };
 
+  // Edit/Update an existing medical record
+  const handleUpdateRecord = async (updatedRecord: CheckupRecord) => {
+    if (user) {
+      const path = 'records';
+      try {
+        await setDoc(doc(db, path, updatedRecord.id), {
+          ...updatedRecord,
+          userId: user.uid
+        }, { merge: true });
+        
+        // Push update to Google Sheets if autoSync is true
+        if (syncConfig.autoSync && accessToken && syncConfig.spreadsheetId) {
+          const updated = records.map((r) => (r.id === updatedRecord.id ? updatedRecord : r));
+          await handleSyncToSheets(updated);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `${path}/${updatedRecord.id}`);
+      }
+    } else {
+      const updated = records.map((r) => (r.id === updatedRecord.id ? updatedRecord : r));
+      saveRecordsToLocalStorage(updated);
+      if (syncConfig.autoSync && accessToken && syncConfig.spreadsheetId) {
+        await handleSyncToSheets(updated);
+      }
+    }
+  };
+
   // Auto-complete list of facility names based on history
   const uniqueFacilities = useMemo(() => {
     const list = new Set(records.map((r) => r.facility));
@@ -584,7 +668,11 @@ export default function App() {
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                <Dashboard records={records} />
+                <Dashboard 
+                  records={records} 
+                  facilityTargets={facilityTargets} 
+                  onUpdateTarget={updateFacilityTarget} 
+                />
               </motion.div>
             )}
 
@@ -602,6 +690,8 @@ export default function App() {
                   <DataEntry 
                     onAddRecord={handleAddRecord} 
                     existingFacilities={uniqueFacilities} 
+                    facilityTargets={facilityTargets}
+                    onUpdateTarget={updateFacilityTarget}
                   />
                 </div>
 
@@ -703,6 +793,7 @@ export default function App() {
                 <RecordHistory 
                   records={records} 
                   onDeleteRecord={handleDeleteRecord} 
+                  onUpdateRecord={handleUpdateRecord} 
                   onSyncNow={accessToken && syncConfig.spreadsheetId ? () => handleSyncToSheets() : undefined}
                   isSyncing={isSyncing}
                   sheetsUrl={syncConfig.spreadsheetUrl}
@@ -718,7 +809,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                <ExportSection records={records} />
+                <ExportSection records={records} facilityTargets={facilityTargets} />
               </motion.div>
             )}
           </AnimatePresence>
