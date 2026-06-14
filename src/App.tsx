@@ -230,7 +230,15 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Đăng nhập thất bại:', err);
-      setSyncError('Đăng nhập Google thất bại. Vui lòng kiểm tra lại popup.');
+      if (err?.code === 'auth/popup-blocked') {
+        setSyncError(
+          'Trình duyệt đã chặn cửa sổ Popup đăng nhập. Vui lòng cho phép hiện Popup ở góc phải thanh địa chỉ tiện ích, hoặc bấm chia sẻ/Mở trang trong tab mới (mũi tên chéo góc phải trên của AI Studio) để đăng nhập an toàn.'
+        );
+      } else {
+        setSyncError(
+          'Đăng nhập Google thất bại. Do hạn chế bảo mật nội dung Iframe của AI Studio, vui lòng bấm nút "Mở trong tab mới" (icon mũi tên chéo góc trên bên phải khung preview) để đăng nhập và kết nối Google Drive thuận tiện nhất.'
+        );
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -280,7 +288,9 @@ export default function App() {
       });
     } catch (err: any) {
       console.error('Lỗi khi khởi tạo Google Sheets:', err);
-      setSyncError('Khởi tạo kết nối Google Sheets thất bại.');
+      setSyncError(
+        'Khởi tạo kết nối Google Sheets thất bại. Đảm bảo bạn đã bấm chọn (tích các ô vuông) đồng ý cấp quyền xem/chỉnh sửa file Google Drive & Google Sheets tại giao diện đăng nhập Google. Bạn có thể Đăng xuất để tiến hành liên kết và chọn tích quyền lại.'
+      );
     } finally {
       setIsSyncing(false);
     }

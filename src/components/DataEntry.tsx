@@ -32,6 +32,7 @@ export default function DataEntry({
   const [quantity, setQuantity] = useState<number | ''>('');
   const [notes, setNotes] = useState<string>('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Facility Target State & Effect to load from prop
   const targetForCurrentFacility = useMemo(() => {
@@ -175,6 +176,20 @@ export default function DataEntry({
     setActiveAreaIndex(-1);
   };
 
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    // Check if Ctrl+Enter or Cmd+Enter is pressed
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (formRef.current) {
+        if (typeof formRef.current.requestSubmit === 'function') {
+          formRef.current.requestSubmit();
+        } else {
+          formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!facility.trim()) return;
@@ -208,7 +223,7 @@ export default function DataEntry({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-5">
         {/* Date Row */}
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
@@ -593,7 +608,10 @@ export default function DataEntry({
           className="w-full py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
         >
           <PlusCircle className="w-4 h-4" />
-          Lưu bản ghi nhập số liệu
+          <span>Lưu bản ghi nhập số liệu</span>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 h-5 select-none rounded border border-slate-700 bg-slate-800 px-1.5 font-mono text-[10px] font-medium text-slate-400 ml-1.5 shrink-0">
+            Ctrl + Enter
+          </kbd>
         </button>
       </form>
 
