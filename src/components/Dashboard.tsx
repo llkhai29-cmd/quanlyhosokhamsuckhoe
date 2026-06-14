@@ -472,7 +472,7 @@ export default function Dashboard({
       </div>
 
       {/* KPI Cards Area */}
-      <div id="dashboard-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div id="dashboard-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Total Card */}
         <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
           <p className="text-[10px] uppercase font-semibold text-slate-300 tracking-wider">Tổng cộng hồ sơ</p>
@@ -480,31 +480,6 @@ export default function Dashboard({
           <p className="text-[10px] text-slate-400 mt-2">Toàn hệ thống</p>
           <div className="absolute right-3 bottom-3 opacity-15">
             <Users className="w-10 h-10" />
-          </div>
-        </div>
-
-        {/* Overall Target Achievement Card */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Tiến độ chỉ tiêu</span>
-              <Target className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            </div>
-            <p className="text-xl font-bold font-mono text-indigo-600 font-sans">
-              {activeTargetSum > 0 ? `${((stats.total / activeTargetSum) * 100).toFixed(1)}%` : '0.0%'}
-            </p>
-          </div>
-          <div className="mt-2 space-y-1">
-            <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
-              <div 
-                className="bg-indigo-600 h-1 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, activeTargetSum > 0 ? (stats.total / activeTargetSum) * 100 : 0)}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center text-[9px] text-slate-400 font-mono">
-              <span>Đạt: {stats.total.toLocaleString('vi-VN')}</span>
-              <span>CT: {activeTargetSum.toLocaleString('vi-VN')}</span>
-            </div>
           </div>
         </div>
 
@@ -656,7 +631,7 @@ export default function Dashboard({
         </div>
 
         {/* Dynamic Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+        <div className="grid grid-cols-1 gap-6 pt-2">
           
           {/* Chart Left: Demographic Grouping Structure */}
           <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
@@ -717,71 +692,6 @@ export default function Dashboard({
                       radius={compareMode === 'stacked' ? [3, 3, 0, 0] : [3, 3, 0, 0]}
                       barSize={compareMode === 'stacked' ? 36 : 8}
                     />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-
-          {/* Chart Right: Completion Rate Comparison */}
-          <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
-            <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Tiến độ Hoàn thành Chỉ tiêu (%)</span>
-              </span>
-              <span className="text-[10px] text-slate-400 font-normal">Mốc chuẩn: 100%</span>
-            </h4>
-            <div className="h-[280px]">
-              {selectedComparisonFacilities.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                  <p className="text-slate-400 text-xs">Chưa chọn cơ sở để hiển thị biểu đồ</p>
-                </div>
-              ) : completionRateData.every(item => item['Chỉ tiêu'] === 0) ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-5">
-                  <Target className="w-8 h-8 text-slate-300 stroke-1 mb-2 animate-bounce" />
-                  <p className="text-slate-600 text-xs font-semibold">Chưa thiết lập chỉ tiêu</p>
-                  <p className="text-slate-400 text-[10px] mt-1 max-w-xs leading-normal">
-                    Thiết lập chỉ tiêu cho các cơ sở y tế ở cột "Chỉ tiêu" của bảng tổng hợp phía dưới để kích hoạt so sánh hiệu suất hoàn thành.
-                  </p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={completionRateData}
-                    margin={{ top: 15, right: 10, left: -25, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="facility" tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                    <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" unit="%" />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                      formatter={(value, name) => {
-                        if (name === 'Tỷ lệ hoàn thành (%)') {
-                          return [`${value}%`, 'Tỷ lệ hoạt đạt'];
-                        }
-                        return [value, name];
-                      }}
-                    />
-                    <ReferenceLine y={100} stroke="#10b981" strokeDasharray="4 4" label={{ value: 'Đạt 100%', fill: '#10b981', fontSize: 8, position: 'top' }} />
-                    <Bar
-                      dataKey="Tỷ lệ hoàn thành (%)"
-                      fill="#6366f1"
-                      radius={[4, 4, 0, 0]}
-                      barSize={36}
-                    >
-                      {completionRateData.map((entry, index) => {
-                        const pct = entry['Tỷ lệ hoàn thành (%)'];
-                        const color = pct >= 100 
-                          ? '#10b981' 
-                          : pct >= 75 
-                            ? '#6366f1' 
-                            : pct >= 40 
-                              ? '#3b82f6' 
-                              : '#f59e0b';
-                        return <Cell key={`cell-${index}`} fill={color} />;
-                      })}
-                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               )}
