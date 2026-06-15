@@ -3,6 +3,7 @@
   "appId": "1:551840861885:web:954a04adcea5f79d71f1d4",
   "apiKey": "AIzaSyA8zYkLerS1jx5Lm4Cc7bGlUeK_G-c5O38",
   "authDomain": "soy-unity-8dzcr.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-e14fb295-10ad-4f89-b56d-cfff868d7edd",
   "storageBucket": "soy-unity-8dzcr.firebasestorage.app",
   "messagingSenderId": "551840861885",
   "measurementId": ""

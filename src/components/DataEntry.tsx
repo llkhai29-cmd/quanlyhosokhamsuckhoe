@@ -6,10 +6,12 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES, AgeGroup, CheckupRecord } from '../types';
-import { FilePlus, Calendar, Landmark, Users, PlusCircle, PenLine, Search, Sparkles, Target } from 'lucide-react';
+import { FilePlus, Calendar, Landmark, Users, PlusCircle, PenLine, Search, Sparkles, Target, FileSpreadsheet } from 'lucide-react';
+import ExcelImport from './ExcelImport';
 
 interface DataEntryProps {
   onAddRecord: (record: Omit<CheckupRecord, 'id' | 'createdAt'>) => void;
+  onAddRecords?: (records: Omit<CheckupRecord, 'id' | 'createdAt'>[]) => Promise<void> | void;
   existingFacilities: string[];
   existingManagedAreas?: string[];
   facilityTargets?: Record<string, number>;
@@ -18,6 +20,7 @@ interface DataEntryProps {
 
 export default function DataEntry({ 
   onAddRecord, 
+  onAddRecords,
   existingFacilities,
   existingManagedAreas = [],
   facilityTargets = {},
@@ -32,7 +35,40 @@ export default function DataEntry({
   const [quantity, setQuantity] = useState<number | ''>('');
   const [notes, setNotes] = useState<string>('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [entryMode, setEntryMode] = useState<'manual' | 'excel'>('manual');
   const formRef = useRef<HTMLFormElement>(null);
+
+  const [flashFacility, setFlashFacility] = useState(false);
+  const [flashArea, setFlashArea] = useState(false);
+
+  const triggerFacilityFlash = () => {
+    setFlashFacility(true);
+    setTimeout(() => setFlashFacility(false), 900);
+  };
+
+  const triggerAreaFlash = () => {
+    setFlashArea(true);
+    setTimeout(() => setFlashArea(false), 900);
+  };
+
+  const formVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { type: 'spring', stiffness: 300, damping: 26 }
+    }
+  };
 
   // Facility Target State & Effect to load from prop
   const targetForCurrentFacility = useMemo(() => {
@@ -124,9 +160,7 @@ export default function DataEntry({
       e.preventDefault();
     } else if (e.key === 'Enter') {
       if (activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
-        setFacility(filteredSuggestions[activeIndex]);
-        setShowSuggestions(false);
-        setActiveIndex(-1);
+        handleSelectSuggestion(filteredSuggestions[activeIndex]);
         e.preventDefault();
       }
     } else if (e.key === 'Escape') {
@@ -139,6 +173,7 @@ export default function DataEntry({
     setFacility(value);
     setShowSuggestions(false);
     setActiveIndex(-1);
+    triggerFacilityFlash();
   };
 
   const handleAreaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -159,9 +194,7 @@ export default function DataEntry({
       e.preventDefault();
     } else if (e.key === 'Enter') {
       if (activeAreaIndex >= 0 && activeAreaIndex < filteredAreaSuggestions.length) {
-        setManagedArea(filteredAreaSuggestions[activeAreaIndex]);
-        setShowAreaSuggestions(false);
-        setActiveAreaIndex(-1);
+        handleSelectAreaSuggestion(filteredAreaSuggestions[activeAreaIndex]);
         e.preventDefault();
       }
     } else if (e.key === 'Escape') {
@@ -174,6 +207,7 @@ export default function DataEntry({
     setManagedArea(value);
     setShowAreaSuggestions(false);
     setActiveAreaIndex(-1);
+    triggerAreaFlash();
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent) => {
@@ -213,19 +247,83 @@ export default function DataEntry({
 
   return (
     <div id="data-entry-card" className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 relative">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
-          <FilePlus className="w-5 h-5" />
+      <div className="flex items-center justify-between flex-wrap gap-4 mb-6 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
+            {entryMode === 'manual' ? (
+              <FilePlus className="w-5 h-5" />
+            ) : (
+              <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+            )}
+          </div>
+          <div>
+            <h2 className="font-semibold text-lg text-slate-900">
+              {entryMode === 'manual' ? 'Nhập số liệu mới' : 'Nhập Excel hàng loạt'}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {entryMode === 'manual' 
+                ? 'Thêm số lượng hồ sơ báo cáo theo nhóm độ tuổi' 
+                : 'Tải lên bảng biểu báo cáo tích hợp đầy đủ thông tin'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-semibold text-lg text-slate-900">Nhập số liệu mới</h2>
-          <p className="text-xs text-slate-500">Thêm số lượng hồ sơ bảo cáo theo nhóm độ tuổi</p>
+
+        {/* Mode Switcher */}
+        <div className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/50">
+          <button
+            id="btn-mode-manual"
+            type="button"
+            onClick={() => setEntryMode('manual')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              entryMode === 'manual'
+                ? 'bg-white text-blue-700 shadow-sm font-bold'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
+            }`}
+          >
+            Nhập thủ công
+          </button>
+          <button
+            id="btn-mode-excel"
+            type="button"
+            onClick={() => setEntryMode('excel')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              entryMode === 'excel'
+                ? 'bg-white text-indigo-700 shadow-sm font-bold'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
+            }`}
+          >
+            Nhập từ Excel
+          </button>
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="space-y-5">
+      {entryMode === 'excel' ? (
+        <ExcelImport
+          onAddRecords={async (importedRecords) => {
+            if (onAddRecords) {
+              await onAddRecords(importedRecords);
+            } else {
+              for (const r of importedRecords) {
+                onAddRecord(r);
+              }
+            }
+          }}
+          onUpdateTarget={onUpdateTarget}
+          existingFacilities={existingFacilities}
+          existingManagedAreas={existingManagedAreas}
+        />
+      ) : (
+        <motion.form 
+          ref={formRef} 
+          onSubmit={handleSubmit} 
+          onKeyDown={handleFormKeyDown} 
+          className="space-y-5"
+          initial="hidden"
+          animate="visible"
+          variants={formVariants}
+        >
         {/* Date Row */}
-        <div>
+        <motion.div variants={itemVariants}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             Ngày thực hiện khám sức khỏe
@@ -238,15 +336,26 @@ export default function DataEntry({
             onChange={(e) => setDate(e.target.value)}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
           />
-        </div>
+        </motion.div>
 
         {/* Facility */}
-        <div ref={autocompleteRef}>
+        <motion.div ref={autocompleteRef} variants={itemVariants}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <Landmark className="w-3.5 h-3.5 text-slate-400" />
             Cơ sở tổ chức khám
           </label>
-          <div className="relative">
+          <motion.div 
+            animate={{
+              boxShadow: flashFacility ? "0 0 14px 2px rgba(99, 102, 241, 0.4)" : "0 0 0px 0px rgba(99, 102, 241, 0)",
+              scale: flashFacility ? [1, 1.025, 1] : 1,
+            }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className={`relative rounded-xl border transition-all ${
+              flashFacility 
+                ? 'border-indigo-500 ring-2 ring-indigo-500/25 bg-indigo-50/5' 
+                : 'border-transparent'
+            }`}
+          >
             <input
               id="input-facility"
               type="text"
@@ -330,7 +439,7 @@ export default function DataEntry({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
           {existingFacilities.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <span className="text-[10px] text-slate-400 self-center">Gợi ý gần đây:</span>
@@ -345,7 +454,12 @@ export default function DataEntry({
                     id={`suggested-facility-${idx}`}
                     key={f}
                     type="button"
-                    onClick={() => setFacility(f)}
+                    onClick={() => {
+                      setFacility(f);
+                      triggerFacilityFlash();
+                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
                   >
                     {f}
@@ -354,15 +468,26 @@ export default function DataEntry({
               </AnimatePresence>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Managed Area */}
-        <div ref={areaAutocompleteRef}>
+        <motion.div ref={areaAutocompleteRef} variants={itemVariants}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <Search className="w-3.5 h-3.5 text-slate-400" />
             Địa bàn quản lý
           </label>
-          <div className="relative">
+          <motion.div 
+            animate={{
+              boxShadow: flashArea ? "0 0 14px 2px rgba(99, 102, 241, 0.4)" : "0 0 0px 0px rgba(99, 102, 241, 0)",
+              scale: flashArea ? [1, 1.025, 1] : 1,
+            }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className={`relative rounded-xl border transition-all ${
+              flashArea 
+                ? 'border-indigo-500 ring-2 ring-indigo-500/25 bg-indigo-50/5' 
+                : 'border-transparent'
+            }`}
+          >
             <input
               id="input-managed-area"
               type="text"
@@ -446,7 +571,7 @@ export default function DataEntry({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
           {existingManagedAreas.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <span className="text-[10px] text-slate-400 self-center">Gợi ý gần đây:</span>
@@ -461,7 +586,12 @@ export default function DataEntry({
                     id={`suggested-area-${idx}`}
                     key={a}
                     type="button"
-                    onClick={() => setManagedArea(a)}
+                    onClick={() => {
+                      setManagedArea(a);
+                      triggerAreaFlash();
+                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100 transition-all font-medium cursor-pointer"
                   >
                     {a}
@@ -470,10 +600,10 @@ export default function DataEntry({
               </AnimatePresence>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Facility Target Input */}
-        <div className="p-3.5 bg-slate-50/50 border border-slate-150 rounded-xl">
+        <motion.div variants={itemVariants} className="p-3.5 bg-slate-50/50 border border-slate-150 rounded-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <label htmlFor="facility-target-input" className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -508,10 +638,10 @@ export default function DataEntry({
               <span className={`text-[10.5px] font-medium ${facility.trim() !== '' ? 'text-slate-500' : 'text-slate-400'}`}>hồ sơ</span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Categories Selection with detailed subdivisions */}
-        <div>
+        <motion.div variants={itemVariants}>
           <label className="block text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-slate-400" />
             Nhóm đối tượng độ tuổi
@@ -546,7 +676,16 @@ export default function DataEntry({
                   />
                   <div className="flex-1 z-10">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-800">{cat.name}</span>
+                      <span className={`text-xs font-semibold flex items-center gap-1.5 transition-all ${isActive ? 'text-indigo-950 font-bold' : 'text-slate-800'}`}>
+                        {isActive && (
+                          <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0 inline-block"
+                          />
+                        )}
+                        {cat.name}
+                      </span>
                       <span
                         className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: `${cat.color}15`, color: cat.color }}
@@ -562,14 +701,32 @@ export default function DataEntry({
               );
             })}
           </div>
-        </div>
+        </motion.div>
 
         {/* Quantity */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-            <PlusCircle className="w-3.5 h-3.5 text-slate-400" />
-            Số lượng hồ sơ đã khám
-          </label>
+        <motion.div variants={itemVariants}>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+              <PlusCircle className="w-3.5 h-3.5 text-slate-400" />
+              Số lượng hồ sơ đã khám
+            </label>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={category}
+                initial={{ opacity: 0, scale: 0.8, x: 5 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: -5 }}
+                transition={{ duration: 0.15 }}
+                className="text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider"
+                style={{ 
+                  backgroundColor: `${CATEGORIES[category]?.color}15`, 
+                  color: CATEGORIES[category]?.color 
+                }}
+              >
+                Nhóm: {CATEGORIES[category]?.name}
+              </motion.span>
+            </AnimatePresence>
+          </div>
           <input
             id="input-quantity"
             type="number"
@@ -583,10 +740,10 @@ export default function DataEntry({
             }}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
           />
-        </div>
+        </motion.div>
 
         {/* Notes */}
-        <div>
+        <motion.div variants={itemVariants}>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
             <PenLine className="w-3.5 h-3.5 text-slate-400" />
             Ghi chú phụ / Ghi chú đợt khám (Không bắt buộc)
@@ -599,21 +756,25 @@ export default function DataEntry({
             onChange={(e) => setNotes(e.target.value)}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 resize-none font-sans"
           />
-        </div>
+        </motion.div>
 
         {/* Submit */}
-        <button
+        <motion.button
           id="btn-submit-record"
           type="submit"
-          className="w-full py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+          variants={itemVariants}
+          whileHover={{ translateY: -1 }}
+          whileTap={{ scale: 0.985 }}
+          className="w-full py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/20 transition-all flex items-center justify-center gap-2 mt-2"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Lưu bản ghi nhập số liệu</span>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 h-5 select-none rounded border border-slate-700 bg-slate-800 px-1.5 font-mono text-[10px] font-medium text-slate-400 ml-1.5 shrink-0">
             Ctrl + Enter
           </kbd>
-        </button>
-      </form>
+        </motion.button>
+        </motion.form>
+      )}
 
       <AnimatePresence>
         {showSuccessToast && (

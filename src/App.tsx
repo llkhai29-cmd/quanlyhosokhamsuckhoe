@@ -383,6 +383,49 @@ export default function App() {
     }
   };
 
+  // Add a batch/list of checkup records (mainly for Excel Import)
+  const handleAddRecordsBatch = async (newRecordsData: Omit<CheckupRecord, 'id' | 'createdAt'>[]) => {
+    if (newRecordsData.length === 0) return;
+
+    const countRecords = records.length;
+    const newRecords: CheckupRecord[] = newRecordsData.map((data, index) => ({
+      ...data,
+      id: `REC-${Date.now()}-${countRecords + index + 1}`,
+      createdAt: Date.now() + index, // spread timestamp slightly
+    }));
+
+    const updated = [...newRecords, ...records];
+
+    if (user) {
+      const path = 'records';
+      try {
+        // Use writeBatch for high efficiency
+        const batch = writeBatch(db);
+        newRecords.forEach((rec) => {
+          const docRef = doc(db, path, rec.id);
+          batch.set(docRef, {
+            ...rec,
+            userId: user.uid
+          });
+        });
+        await batch.commit();
+
+        // Push update to Google Sheets if autoSync is true
+        if (syncConfig.autoSync && accessToken && syncConfig.spreadsheetId) {
+          await handleSyncToSheets(updated);
+        }
+      } catch (error) {
+        console.error("Lỗi khi thêm loạt bản ghi nhập số liệu:", error);
+        setSyncError("Thống kê loạt bản ghi lên đám mây thất bại.");
+      }
+    } else {
+      saveRecordsToLocalStorage(updated);
+      if (syncConfig.autoSync && accessToken && syncConfig.spreadsheetId) {
+        await handleSyncToSheets(updated);
+      }
+    }
+  };
+
   // Delete an existing record
   const handleDeleteRecord = async (id: string) => {
     if (user) {
@@ -706,6 +749,7 @@ export default function App() {
                 <div className="lg:col-span-2">
                   <DataEntry 
                     onAddRecord={handleAddRecord} 
+                    onAddRecords={handleAddRecordsBatch}
                     existingFacilities={uniqueFacilities} 
                     existingManagedAreas={uniqueManagedAreas}
                     facilityTargets={facilityTargets}

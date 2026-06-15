@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CheckupRecord, CATEGORIES, AgeGroup, CategoryInfo } from '../types';
 import { 
   ResponsiveContainer, 
@@ -36,8 +37,16 @@ export default function Dashboard({
 }: DashboardProps) {
   const [filterFacility, setFilterFacility] = useState<string>('all');
   const [filterManagedArea, setFilterManagedArea] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<'all' | 'last_7_days' | 'this_month' | 'last_month'>('all');
+  const [timeMode, setTimeMode] = useState<'all' | 'month' | 'quarter' | 'preset'>('all');
+  const [selectedMonthStr, setSelectedMonthStr] = useState<string>('all');
+  const [selectedQuarterStr, setSelectedQuarterStr] = useState<string>('all');
+  const [selectedYearStr, setSelectedYearStr] = useState<string>('all');
+  const [presetRange, setPresetRange] = useState<'last_7_days' | 'this_month' | 'last_month'>('this_month');
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
+
+  // Minimalist / Clean view-state toggles
+  const [showAdvancedTimeMode, setShowAdvancedTimeMode] = useState<boolean>(false);
+  const [activeChartTab, setActiveChartTab] = useState<'demographics' | 'comparison' | 'trend' | 'all'>('demographics');
 
   // Inline targets editing state
   const [editingFacility, setEditingFacility] = useState<string | null>(null);
@@ -77,6 +86,64 @@ export default function Dashboard({
     return ['all', ...Array.from(list)];
   }, [records]);
 
+  // List of unique years from records for high-fidelity filtering
+  const yearsList = useMemo(() => {
+    const list = new Set(records.map(r => {
+      const d = r.date ? new Date(r.date) : null;
+      const year = d && !isNaN(d.getTime()) ? d.getFullYear() : null;
+      return year;
+    }).filter(Boolean) as number[]);
+    return Array.from(list).sort((a, b) => b - a);
+  }, [records]);
+
+  // Unified health indicator for time ranges
+  const isRecordInTimeRange = (rDate: string) => {
+    if (!rDate) return false;
+    const recordDate = new Date(rDate);
+    if (isNaN(recordDate.getTime())) return false;
+    
+    const recYear = recordDate.getFullYear();
+    const recMonth = recordDate.getMonth(); // 0-11
+    
+    // Year constraint (if any year is explicitly set)
+    if (selectedYearStr !== 'all' && String(recYear) !== selectedYearStr) {
+      return false;
+    }
+
+    if (timeMode === 'preset') {
+      const today = new Date();
+      const diffTime = Math.abs(today.getTime() - recordDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (presetRange === 'last_7_days' && diffDays > 7) return false;
+      
+      if (presetRange === 'this_month') {
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        if (recMonth !== currentMonth || recYear !== currentYear) return false;
+      }
+
+      if (presetRange === 'last_month') {
+        const prevMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
+        const prevYear = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+        if (recMonth !== prevMonth || recYear !== prevYear) return false;
+      }
+    } else if (timeMode === 'month') {
+      if (selectedMonthStr !== 'all') {
+        const targetMonth = parseInt(selectedMonthStr, 10); // 0-11
+        if (recMonth !== targetMonth) return false;
+      }
+    } else if (timeMode === 'quarter') {
+      if (selectedQuarterStr !== 'all') {
+        const quarter = parseInt(selectedQuarterStr, 10); // 1, 2, 3, 4
+        const recQuarter = Math.floor(recMonth / 3) + 1; // 1-4
+        if (recQuarter !== quarter) return false;
+      }
+    }
+
+    return true;
+  };
+
   // Filtered records based on controls
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
@@ -86,30 +153,10 @@ export default function Dashboard({
       // Managed Area filter
       if (filterManagedArea !== 'all' && r.managedArea !== filterManagedArea) return false;
 
-      // Time range filter
-      if (timeRange !== 'all') {
-        const recordDate = new Date(r.date);
-        const today = new Date();
-        const diffTime = Math.abs(today.getTime() - recordDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (timeRange === 'last_7_days' && diffDays > 7) return false;
-        
-        if (timeRange === 'this_month') {
-          const currentMonth = today.getMonth();
-          const currentYear = today.getFullYear();
-          if (recordDate.getMonth() !== currentMonth || recordDate.getFullYear() !== currentYear) return false;
-        }
-
-        if (timeRange === 'last_month') {
-          const prevMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
-          const prevYear = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
-          if (recordDate.getMonth() !== prevMonth || recordDate.getFullYear() !== prevYear) return false;
-        }
-      }
-      return true;
+      // Time filter
+      return isRecordInTimeRange(r.date);
     });
-  }, [records, filterFacility, filterManagedArea, timeRange]);
+  }, [records, filterFacility, filterManagedArea, timeMode, selectedMonthStr, selectedQuarterStr, selectedYearStr, presetRange]);
 
   // Calculations for KPI Cards
   const stats = useMemo(() => {
@@ -227,28 +274,7 @@ export default function Dashboard({
       // Filter records for this facility and within date/time ranges
       const facRecords = records.filter((r) => {
         if (r.facility !== facility) return false;
-
-        if (timeRange !== 'all') {
-          const recordDate = new Date(r.date);
-          const today = new Date();
-          const diffTime = Math.abs(today.getTime() - recordDate.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          if (timeRange === 'last_7_days' && diffDays > 7) return false;
-
-          if (timeRange === 'this_month') {
-            const currentMonth = today.getMonth();
-            const currentYear = today.getFullYear();
-            if (recordDate.getMonth() !== currentMonth || recordDate.getFullYear() !== currentYear) return false;
-          }
-
-          if (timeRange === 'last_month') {
-            const prevMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
-            const prevYear = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
-            if (recordDate.getMonth() !== prevMonth || recordDate.getFullYear() !== prevYear) return false;
-          }
-        }
-        return true;
+        return isRecordInTimeRange(r.date);
       });
 
       let under6 = 0;
@@ -275,7 +301,7 @@ export default function Dashboard({
         'Tổng cộng': total,
       };
     }).sort((a, b) => b['Tổng cộng'] - a['Tổng cộng']);
-  }, [records, selectedComparisonFacilities, timeRange]);
+  }, [records, selectedComparisonFacilities, timeMode, selectedMonthStr, selectedQuarterStr, selectedYearStr, presetRange]);
 
   // Aggregate statistics for all facilities based on current active filters
   const facilityTableData = useMemo(() => {
@@ -414,61 +440,242 @@ export default function Dashboard({
   return (
     <div className="space-y-6">
       {/* Filters Area */}
-      <div id="dashboard-filters" className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-        <div className="flex items-center gap-2">
-          <LayoutDashboard className="w-5 h-5 text-slate-700" />
-          <span className="font-semibold text-slate-800 text-sm">Bộ lọc phân tích</span>
-        </div>
+      <div id="dashboard-filters" className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden divide-y divide-slate-100/70">
         
-        <div className="flex flex-wrap items-center gap-3.5 w-full lg:w-auto">
-          {/* Facility Filter */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="text-xs text-slate-500 whitespace-nowrap">Cơ sở khám:</span>
-            <select
-              id="filter-facility-select"
-              value={filterFacility}
-              onChange={(e) => setFilterFacility(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all min-w-[130px] max-w-[200px]"
-            >
-              <option value="all">Tất cả cơ sở khám</option>
-              {facilitiesList.filter(f => f !== 'all').map((fac) => (
-                <option key={fac} value={fac}>{fac}</option>
-              ))}
-            </select>
+        {/* Filter Header and General Geographical Scope */}
+        <div className="p-4 bg-slate-50/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+              <SlidersHorizontal className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-slate-800 text-sm">Bảng Điều Khiển Bộ Lọc Báo Cáo</span>
+              <p className="text-[10px] text-slate-400 mt-0.5">Tùy biến chỉ số so sánh, kho dữ liệu và tiến trình thống kê</p>
+            </div>
           </div>
+          
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            {/* Facility Filter */}
+            <div className="flex flex-col gap-1 flex-1 min-w-[140px] sm:flex-none">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Cơ sở tổ chức khám</label>
+              <select
+                id="filter-facility-select"
+                value={filterFacility}
+                onChange={(e) => setFilterFacility(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full sm:w-auto sm:min-w-[180px] cursor-pointer"
+              >
+                <option value="all">Tất cả cơ sở khám ({facilitiesList.length - 1})</option>
+                {facilitiesList.filter(f => f !== 'all').map((fac) => (
+                  <option key={fac} value={fac}>{fac}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* Managed Area Filter */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="text-xs text-slate-500 whitespace-nowrap">Địa bàn quản lý:</span>
-            <select
-              id="filter-managed-area-select"
-              value={filterManagedArea}
-              onChange={(e) => setFilterManagedArea(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all min-w-[130px] max-w-[200px]"
-            >
-              <option value="all">Tất cả địa bàn</option>
-              {managedAreasList.filter(m => m !== 'all').map((area) => (
-                <option key={area} value={area}>{area}</option>
-              ))}
-            </select>
-          </div>
+            {/* Managed Area Filter */}
+            <div className="flex flex-col gap-1 flex-1 min-w-[140px] sm:flex-none">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Địa bàn hành chính quản lý</label>
+              <select
+                id="filter-managed-area-select"
+                value={filterManagedArea}
+                onChange={(e) => setFilterManagedArea(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full sm:w-auto sm:min-w-[160px] cursor-pointer"
+              >
+                <option value="all">Tất cả địa bàn ({managedAreasList.length - 1})</option>
+                {managedAreasList.filter(m => m !== 'all').map((area) => (
+                  <option key={area} value={area}>{area}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* Time Filter */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="text-xs text-slate-500 whitespace-nowrap">Thời gian:</span>
-            <select
-              id="filter-time-select"
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
-            >
-              <option value="all">Toàn bộ thời gian</option>
-              <option value="last_7_days">7 ngày vừa qua</option>
-              <option value="this_month">Tháng này</option>
-              <option value="last_month">Tháng trước</option>
-            </select>
+            {/* Year Filter */}
+            <div className="flex flex-col gap-1 w-full sm:w-28 flex-none">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Năm thực hiện</label>
+              <select
+                id="filter-year-select"
+                value={selectedYearStr}
+                onChange={(e) => setSelectedYearStr(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer w-full"
+              >
+                <option value="all">Tất cả năm</option>
+                {yearsList.map((yr) => (
+                  <option key={yr} value={String(yr)}>Năm {yr}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Advanced Time Toggle Column */}
+            <div className="flex flex-col gap-1 w-full sm:w-auto flex-none">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block sm:opacity-0">Lọc nâng cao</label>
+              <button
+                type="button"
+                onClick={() => setShowAdvancedTimeMode(!showAdvancedTimeMode)}
+                className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer h-[34px] md:h-[38px] ${
+                  showAdvancedTimeMode
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 ring-2 ring-indigo-500/10'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Lọc thời gian chi tiết</span>
+                {timeMode !== 'all' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"></span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Filter Row 2: Advanced Time Filtering */}
+        <AnimatePresence initial={false}>
+          {showAdvancedTimeMode && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="overflow-hidden bg-white"
+            >
+              <div className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-t border-slate-100">
+                {/* Tab Modes */}
+                <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chế độ phân lọc thời gian</span>
+                  <div className="flex bg-slate-100/70 p-1 rounded-xl border border-slate-200/40 w-full md:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setTimeMode('all')}
+                      className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        timeMode === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs border border-slate-200/20 font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Toàn bộ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimeMode('month')}
+                      className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        timeMode === 'month'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/20 font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Theo Tháng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimeMode('quarter')}
+                      className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        timeMode === 'quarter'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/20 font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Theo Quý
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimeMode('preset')}
+                      className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        timeMode === 'preset'
+                          ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/20 font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Khoảng nhanh
+                    </button>
+                  </div>
+                </div>
+
+                {/* Target inputs according to active Tab Mode */}
+                <div className="w-full md:w-auto flex-1 flex justify-start md:justify-end items-end">
+                  {timeMode === 'all' && (
+                    <div className="text-[11px] text-slate-400 italic">
+                      Đang hiển thị toàn bộ thời gian của năm đã chọn.
+                    </div>
+                  )}
+
+                  {timeMode === 'month' && (
+                    <div className="flex flex-col gap-1 w-full md:w-auto md:max-w-xs">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Chọn tháng cụ thể</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        <select
+                          id="month-time-select"
+                          value={selectedMonthStr}
+                          onChange={(e) => setSelectedMonthStr(e.target.value)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center cursor-pointer min-w-[150px] w-full md:w-auto"
+                        >
+                          <option value="all">Tất cả các tháng (Tháng 1 - 12)</option>
+                          <option value="0">Tháng 01</option>
+                          <option value="1">Tháng 02</option>
+                          <option value="2">Tháng 03</option>
+                          <option value="3">Tháng 04</option>
+                          <option value="4">Tháng 05</option>
+                          <option value="5">Tháng 06</option>
+                          <option value="6">Tháng 07</option>
+                          <option value="7">Tháng 08</option>
+                          <option value="8">Tháng 09</option>
+                          <option value="9">Tháng 10</option>
+                          <option value="10">Tháng 11</option>
+                          <option value="11">Tháng 12</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {timeMode === 'quarter' && (
+                    <div className="flex flex-col gap-1.5 w-full md:w-auto">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Chọn Quý thống kê</label>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {['all', '1', '2', '3', '4'].map((qVal) => {
+                          const isSelected = selectedQuarterStr === qVal;
+                          let label = '';
+                          if (qVal === 'all') label = 'Tất cả quý';
+                          else if (qVal === '1') label = 'Quý I (T1-3)';
+                          else if (qVal === '2') label = 'Quý II (T4-6)';
+                          else if (qVal === '3') label = 'Quý III (T7-9)';
+                          else if (qVal === '4') label = 'Quý IV (T10-12)';
+                          
+                          return (
+                            <button
+                              key={qVal}
+                              type="button"
+                              onClick={() => setSelectedQuarterStr(qVal)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs font-bold'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {timeMode === 'preset' && (
+                    <div className="flex flex-col gap-1 w-full md:w-64">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lọc nhanh theo chu kỳ</label>
+                      <select
+                        id="preset-time-select"
+                        value={presetRange}
+                        onChange={(e) => setPresetRange(e.target.value as any)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer w-full"
+                      >
+                        <option value="last_7_days">7 ngày vừa qua</option>
+                        <option value="this_month">Tháng này (Hiện tại)</option>
+                        <option value="last_month">Tháng trước</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
 
       {/* KPI Cards Area */}
@@ -554,170 +761,229 @@ export default function Dashboard({
         </div>
       </div>
 
+      {/* Layout Tab Switcher for Clean/Minimalist Dashboard */}
+      <div className="bg-white border border-slate-200/60 p-2 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-xs select-none">
+        <div className="flex items-center gap-2 px-2">
+          <LayoutDashboard className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span className="text-xs font-bold text-slate-800">Biểu đồ trực quan (Chế độ xem tối giản)</span>
+        </div>
+        <div className="flex flex-wrap items-center bg-slate-50 p-1 rounded-xl border border-slate-200/60 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => setActiveChartTab('demographics')}
+            className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+              activeChartTab === 'demographics'
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/20 font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span>Cơ cấu Nhóm tuổi</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveChartTab('comparison')}
+            className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+              activeChartTab === 'comparison'
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/20 font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>So sánh Cơ sở</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveChartTab('trend')}
+            className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+              activeChartTab === 'trend'
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/20 font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span>Tiến độ ngày</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveChartTab('all')}
+            className={`flex-1 md:flex-none px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 ${
+              activeChartTab === 'all'
+                ? 'bg-indigo-600 text-white shadow-sm border border-indigo-700 font-bold'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span>Tất cả biểu đồ</span>
+          </button>
+        </div>
+      </div>
+
       {/* Section: Facility Comparison Card */}
-      <div id="facility-comparison-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-500" />
-              <h3 className="text-sm font-bold text-slate-900">Đối chiếu Chỉ số & Hiệu suất giữa các Cơ sở Y tế</h3>
+      {(activeChartTab === 'comparison' || activeChartTab === 'all') && (
+        <div id="facility-comparison-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-900">Đối chiếu Chỉ số & Hiệu suất giữa các Cơ sở Y tế</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">So sánh trực quan cơ cấu đối tượng và tỷ lệ phần trăm hoàn thành chỉ tiêu đề ra giữa các địa bàn cơ sở.</p>
             </div>
-            <p className="text-xs text-slate-500 mt-1">So sánh trực quan cơ cấu đối tượng và tỷ lệ phần trăm hoàn thành chỉ tiêu đề ra giữa các địa bàn cơ sở.</p>
-          </div>
 
-          {/* Mode Switcher */}
-          <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
-            <button
-              id="compare-mode-stacked"
-              onClick={() => setCompareMode('stacked')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                compareMode === 'stacked'
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Cột chồng (Tỷ trọng)
-            </button>
-            <button
-              id="compare-mode-grouped"
-              onClick={() => setCompareMode('grouped')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                compareMode === 'grouped'
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Cột nhóm (Chỉ số rời)
-            </button>
-          </div>
-        </div>
-
-        {/* Facility Selector Panel */}
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-              <span>Cơ sở y tế đối chiếu ({selectedComparisonFacilities.length}/{uniqueFacilitiesOnly.length}):</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px]">
+            {/* Mode Switcher */}
+            <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
               <button
-                id="btn-select-all-comp"
-                onClick={selectAllFacilities}
-                className="text-indigo-600 hover:text-indigo-800 font-medium transition-colors hover:underline focus:outline-none"
+                id="compare-mode-stacked"
+                onClick={() => setCompareMode('stacked')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  compareMode === 'stacked'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
-                Chọn tất cả
+                Cột chồng (Tỷ trọng)
               </button>
-              <span className="text-slate-300">|</span>
               <button
-                id="btn-deselect-all-comp"
-                onClick={deselectAllFacilities}
-                className="text-slate-500 hover:text-slate-700 font-medium transition-colors hover:underline focus:outline-none"
+                id="compare-mode-grouped"
+                onClick={() => setCompareMode('grouped')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  compareMode === 'grouped'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
-                Bỏ chọn tất cả
+                Cột nhóm (Chỉ số rời)
               </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-[110px] overflow-y-auto">
-            {uniqueFacilitiesOnly.length === 0 ? (
-              <span className="text-xs text-slate-400">Chưa ghi nhận cơ sở nào. Vui lòng nhập hồ sơ để kích hoạt.</span>
-            ) : (
-              uniqueFacilitiesOnly.map((facility) => {
-                const isSelected = selectedComparisonFacilities.includes(facility);
-                return (
-                  <button
-                    key={facility}
-                    id={`checkbox-comp-${facility}`}
-                    onClick={() => toggleComparisonFacility(facility)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border font-medium cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                    ) : (
-                      <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    )}
-                    <span>{facility}</span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+          {/* Facility Selector Panel */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <span>Cơ sở y tế đối chiếu ({selectedComparisonFacilities.length}/{uniqueFacilitiesOnly.length}):</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  id="btn-select-all-comp"
+                  onClick={selectAllFacilities}
+                  className="text-indigo-600 hover:text-indigo-800 font-medium transition-colors hover:underline focus:outline-none"
+                >
+                  Chọn tất cả
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  id="btn-deselect-all-comp"
+                  onClick={deselectAllFacilities}
+                  className="text-slate-500 hover:text-slate-700 font-medium transition-colors hover:underline focus:outline-none"
+                >
+                  Bỏ chọn tất cả
+                </button>
+              </div>
+            </div>
 
-        {/* Dynamic Charts Grid */}
-        <div className="grid grid-cols-1 gap-6 pt-2">
-          
-          {/* Chart Left: Demographic Grouping Structure */}
-          <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
-            <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-blue-500" />
-              <span>Cơ cấu Đối tượng & Nhóm tuổi</span>
-            </h4>
-            <div className="h-[280px]">
-              {selectedComparisonFacilities.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                  <p className="text-slate-400 text-xs">Chưa chọn cơ sở để hiển thị biểu đồ</p>
-                </div>
+            <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-[110px] overflow-y-auto">
+              {uniqueFacilitiesOnly.length === 0 ? (
+                <span className="text-xs text-slate-400">Chưa ghi nhận cơ sở nào. Vui lòng nhập hồ sơ để kích hoạt.</span>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={comparisonData}
-                    margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="facility" tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                    <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                      formatter={(value, name) => [`${value.toLocaleString('vi-VN')} hồ sơ`, name]}
-                    />
-                    <Legend
-                      verticalAlign="top"
-                      height={32}
-                      iconType="circle"
-                      iconSize={6}
-                      wrapperStyle={{ fontSize: '10px', paddingBottom: '8px' }}
-                    />
-                    <Bar
-                      dataKey="Dưới 6 tuổi"
-                      stackId={compareMode === 'stacked' ? 'a' : undefined}
-                      fill="#3b82f6"
-                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
-                      barSize={compareMode === 'stacked' ? 36 : 8}
-                    />
-                    <Bar
-                      dataKey="Từ 6-18 tuổi"
-                      stackId={compareMode === 'stacked' ? 'a' : undefined}
-                      fill="#06b6d4"
-                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
-                      barSize={compareMode === 'stacked' ? 36 : 8}
-                    />
-                    <Bar
-                      dataKey="Từ 18-60 tuổi"
-                      stackId={compareMode === 'stacked' ? 'a' : undefined}
-                      fill="#10b981"
-                      radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
-                      barSize={compareMode === 'stacked' ? 36 : 8}
-                    />
-                    <Bar
-                      dataKey="Từ 60 tuổi trở lên"
-                      stackId={compareMode === 'stacked' ? 'a' : undefined}
-                      fill="#ec4899"
-                      radius={compareMode === 'stacked' ? [3, 3, 0, 0] : [3, 3, 0, 0]}
-                      barSize={compareMode === 'stacked' ? 36 : 8}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                uniqueFacilitiesOnly.map((facility) => {
+                  const isSelected = selectedComparisonFacilities.includes(facility);
+                  return (
+                    <button
+                      key={facility}
+                      id={`checkbox-comp-${facility}`}
+                      onClick={() => toggleComparisonFacility(facility)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border font-medium cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      )}
+                      <span>{facility}</span>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
 
+          {/* Dynamic Charts Grid */}
+          <div className="grid grid-cols-1 gap-6 pt-2">
+            
+            {/* Chart Left: Demographic Grouping Structure */}
+            <div className="bg-slate-50/20 p-4 rounded-xl border border-slate-100">
+              <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-blue-500" />
+                <span>Cơ cấu Đối tượng & Nhóm tuổi</span>
+              </h4>
+              <div className="h-[280px]">
+                {selectedComparisonFacilities.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                    <p className="text-slate-400 text-xs">Chưa chọn cơ sở để hiển thị biểu đồ</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={comparisonData}
+                      margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="facility" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                        formatter={(value, name) => [`${value.toLocaleString('vi-VN')} hồ sơ`, name]}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        height={32}
+                        iconType="circle"
+                        iconSize={6}
+                        wrapperStyle={{ fontSize: '10px', paddingBottom: '8px' }}
+                      />
+                      <Bar
+                        dataKey="Dưới 6 tuổi"
+                        stackId={compareMode === 'stacked' ? 'a' : undefined}
+                        fill="#3b82f6"
+                        radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                        barSize={compareMode === 'stacked' ? 36 : 8}
+                      />
+                      <Bar
+                        dataKey="Từ 6-18 tuổi"
+                        stackId={compareMode === 'stacked' ? 'a' : undefined}
+                        fill="#06b6d4"
+                        radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                        barSize={compareMode === 'stacked' ? 36 : 8}
+                      />
+                      <Bar
+                        dataKey="Từ 18-60 tuổi"
+                        stackId={compareMode === 'stacked' ? 'a' : undefined}
+                        fill="#10b981"
+                        radius={compareMode === 'stacked' ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+                        barSize={compareMode === 'stacked' ? 36 : 8}
+                      />
+                      <Bar
+                        dataKey="Từ 60 tuổi trở lên"
+                        stackId={compareMode === 'stacked' ? 'a' : undefined}
+                        fill="#ec4899"
+                        radius={compareMode === 'stacked' ? [3, 3, 0, 0] : [3, 3, 0, 0]}
+                        barSize={compareMode === 'stacked' ? 36 : 8}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Section: Facility Statistical Summary Table */}
       <div id="facility-summary-table-card" className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
@@ -988,130 +1254,134 @@ export default function Dashboard({
       </div>
 
       {/* Main Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Left: Pie chart major distribution */}
+      {(activeChartTab === 'demographics' || activeChartTab === 'all') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Left: Pie chart major distribution */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-4.5 h-4.5 text-blue-500" />
+              <h3 className="text-sm font-semibold text-slate-900">Phân phối Hồ sơ theo Nhóm độ tuổi</h3>
+            </div>
+            <div className="h-[280px]">
+              {pieChartData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                  Không lọc được dữ liệu nào
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieChartData}
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={60}
+                      outerRadius={85}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => `${value.toLocaleString('vi-VN')} hồ sơ`} 
+                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px' }}
+                    />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36} 
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: '11px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Subdivision breakout for workforce (18-60) */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4.5 h-4.5 text-emerald-500" />
+                <h3 className="text-sm font-semibold text-slate-900">Cơ cấu Nhóm 18 đến dưới 60 tuổi (Chi tiết)</h3>
+              </div>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full font-medium">
+                3 nhóm đối tượng
+              </span>
+            </div>
+            <div className="h-[280px]">
+              {subdivs18to60Data.every(item => item.value === 0) ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs text-center px-4">
+                  Chưa có số liệu nhập cho nhóm độ tuổi lao động (18-60 tuổi). Hãy nhập bản ghi các phân ngành này để xem.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={subdivs18to60Data}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                    <Tooltip 
+                      formatter={(value) => `${value.toLocaleString('vi-VN')} hồ sơ`}
+                      contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px' }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
+                      {subdivs18to60Data.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Trend Row */}
+      {(activeChartTab === 'trend' || activeChartTab === 'all') && (
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
-            <Users className="w-4.5 h-4.5 text-blue-500" />
-            <h3 className="text-sm font-semibold text-slate-900">Phân phối Hồ sơ theo Nhóm độ tuổi</h3>
+            <TrendingUp className="w-4.5 h-4.5 text-indigo-500" />
+            <h3 className="text-sm font-semibold text-slate-900">Tiến độ thu nhận số liệu theo Ngày</h3>
           </div>
-          <div className="h-[280px]">
-            {pieChartData.length === 0 ? (
+          <div className="h-[220px]">
+            {trendData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-xs">
-                Không lọc được dữ liệu nào
+                Chưa có đủ số liệu ngày khám để biểu diễn tiến trình
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieChartData}
-                    cx="50%"
-                    cy="45%"
-                    innerRadius={60}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
+                <AreaChart
+                  data={trendData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorQuantity" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
                   <Tooltip 
                     formatter={(value) => `${value.toLocaleString('vi-VN')} hồ sơ`} 
                     contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px' }}
                   />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36} 
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: '11px' }}
-                  />
-                </PieChart>
+                  <Area type="monotone" dataKey="Số hồ sơ" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorQuantity)" />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
-
-        {/* Right: Subdivision breakout for workforce (18-60) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-4.5 h-4.5 text-emerald-500" />
-              <h3 className="text-sm font-semibold text-slate-900">Cơ cấu Nhóm 18 đến dưới 60 tuổi (Chi tiết)</h3>
-            </div>
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full font-medium">
-              3 nhóm đối tượng
-            </span>
-          </div>
-          <div className="h-[280px]">
-            {subdivs18to60Data.every(item => item.value === 0) ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs text-center px-4">
-                Chưa có số liệu nhập cho nhóm độ tuổi lao động (18-60 tuổi). Hãy nhập bản ghi các phân ngành này để xem.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={subdivs18to60Data}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                  <Tooltip 
-                    formatter={(value) => `${value.toLocaleString('vi-VN')} hồ sơ`}
-                    contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px' }}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
-                    {subdivs18to60Data.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* Trend Row */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-4.5 h-4.5 text-indigo-500" />
-          <h3 className="text-sm font-semibold text-slate-900">Tiến độ thu nhận số liệu theo Ngày</h3>
-        </div>
-        <div className="h-[220px]">
-          {trendData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-400 text-xs">
-              Chưa có đủ số liệu ngày khám để biểu diễn tiến trình
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={trendData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorQuantity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <Tooltip 
-                  formatter={(value) => `${value.toLocaleString('vi-VN')} hồ sơ`} 
-                  contentStyle={{ borderRadius: '12px', borderColor: '#f1f5f9', fontSize: '11px' }}
-                />
-                <Area type="monotone" dataKey="Số hồ sơ" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorQuantity)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
